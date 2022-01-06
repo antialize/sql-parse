@@ -30,3 +30,9 @@ impl Spanned for Span {
         self.clone()
     }
 }
+
+impl<T: Spanned> Spanned for Box<T> {
+    fn span(&self) -> Span {
+        self.as_ref().span()
+    }
+}

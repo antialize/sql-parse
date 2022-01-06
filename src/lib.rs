@@ -11,13 +11,13 @@
 // limitations under the License.
 
 use parser::Parser;
-mod create;
 mod data_type;
 mod expression;
 mod issue;
 mod keywords;
 mod lexer;
 mod parser;
+mod select;
 mod span;
 mod statement;
 

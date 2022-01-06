@@ -29,6 +29,7 @@ pub(crate) struct Parser<'a> {
     pub(crate) span: Span,
     pub(crate) lexer: Lexer<'a>,
     pub(crate) issues: Vec<Issue>,
+    pub(crate) arg: usize,
 }
 
 pub(crate) fn decode_single_quoted_string(s: &str) -> Cow<'_, str> {
@@ -75,7 +76,7 @@ impl<'a> Parser<'a> {
             span,
             lexer,
             issues: Vec::new(),
-            // recover: RecoverNone
+            arg: 0
         }
     }
 

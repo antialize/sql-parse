@@ -24,6 +24,7 @@ pub enum Token<'a> {
     Div,
     DoubleColon,
     DoubleExclamationMark,
+    DoubleAmpersand,
     DoublePipe,
     Eq,
     ExclamationMark,
@@ -73,6 +74,7 @@ impl<'a> Token<'a> {
             Token::DoubleColon => "'::'",
             Token::DoubleExclamationMark => "'!!'",
             Token::DoublePipe => "'||'",
+            Token::DoubleAmpersand => "'&&'",
             Token::Eq => "'='",
             Token::ExclamationMark => "'!'",
             Token::Float(_) => "Float",
@@ -158,7 +160,13 @@ impl<'a> Lexer<'a> {
                 '\\' => Token::Backslash,
                 '[' => Token::LBracket,
                 ']' => Token::RBracket,
-                '&' => Token::Ampersand,
+                '&' => match self.chars.peek() {
+                    Some((_, '&')) => {
+                        self.chars.next();
+                        Token::DoubleAmpersand
+                    }
+                    _ => Token::Ampersand,
+                }
                 '^' => Token::Caret,
                 '{' => Token::LBrace,
                 '}' => Token::RBrace,

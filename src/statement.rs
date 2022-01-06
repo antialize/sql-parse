@@ -17,7 +17,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Span,
+    Span, select::{Select, parse_select},
 };
 
 #[derive(Clone, Debug)]
@@ -309,12 +309,14 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, P
 #[derive(Clone, Debug)]
 pub enum Statement<'a> {
     CreateTable(CreateTable<'a>),
+    Select(Select<'a>)
 }
 
 pub(crate) fn parse_statement<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, ParseError> {
     match &parser.token {
         Token::Ident(_, Keyword::CREATE) => parse_create(parser),
         Token::Ident(_, Keyword::DROP) => parse_drop(parser),
+        Token::Ident(_, Keyword::SELECT) => Ok(Statement::Select(parse_select(parser)?)),
         _ => parser.expected_failure("Statement"),
     }
 }

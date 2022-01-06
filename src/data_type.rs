@@ -17,7 +17,7 @@ use std::{
 };
 
 use crate::{
-    expression::{parse_literal, Expression},
+    expression::{parse_expression_bottom, Expression},
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser, SingleQuotedString},
@@ -38,41 +38,21 @@ pub enum DataTypeProperty<'a> {
     Collate((&'a str, Span)),
 }
 
-impl<'a> std::fmt::Display for DataTypeProperty<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DataTypeProperty::Signed(_) => f.write_str("SIGNED"),
-            DataTypeProperty::Unsigned(_) => f.write_str("UNSIGNED"),
-            DataTypeProperty::Zerofill(_) => f.write_str("ZEROFILL"),
-            DataTypeProperty::Null(_) => f.write_str("NULL"),
-            DataTypeProperty::NotNull(_) => f.write_str("NOT NULL"),
-            DataTypeProperty::Default(v) => match v.deref() {
-                Expression::Literal(v) => write!(f, "DEFAULT {}", v),
-            },
-            DataTypeProperty::Comment((v, _)) => {
-                write!(f, "COMMENT {}", SingleQuotedString(v.as_ref()))
-            }
-            DataTypeProperty::Charset((v, _)) => write!(f, "CHARSET {}", v),
-            DataTypeProperty::Collate((v, _)) => write!(f, "COLLATE {}", v),
-        }
-    }
-}
-
-impl<'a> Spanned for DataTypeProperty<'a> {
-    fn span(&self) -> Span {
-        match &self {
-            DataTypeProperty::Signed(s) => s.clone(),
-            DataTypeProperty::Unsigned(s) => s.clone(),
-            DataTypeProperty::Zerofill(s) => s.clone(),
-            DataTypeProperty::Null(s) => s.clone(),
-            DataTypeProperty::NotNull(s) => s.clone(),
-            DataTypeProperty::Default(s) => s.span(),
-            DataTypeProperty::Comment((_, s)) => s.clone(),
-            DataTypeProperty::Charset((_, s)) => s.clone(),
-            DataTypeProperty::Collate((_, s)) => s.clone(),
-        }
-    }
-}
+// impl<'a> Spanned for DataTypeProperty<'a> {
+//     fn span(&self) -> Span {
+//         match &self {
+//             DataTypeProperty::Signed(s) => s.clone(),
+//             DataTypeProperty::Unsigned(s) => s.clone(),
+//             DataTypeProperty::Zerofill(s) => s.clone(),
+//             DataTypeProperty::Null(s) => s.clone(),
+//             DataTypeProperty::NotNull(s) => s.clone(),
+//             DataTypeProperty::Default(s) => s.span(),
+//             DataTypeProperty::Comment((_, s)) => s.clone(),
+//             DataTypeProperty::Charset((_, s)) => s.clone(),
+//             DataTypeProperty::Collate((_, s)) => s.clone(),
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub enum Type<'a> {
@@ -100,144 +80,6 @@ pub enum Type<'a> {
     VarBinary((usize, Span)),
 }
 
-impl<'a> Display for Type<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            Type::TinyInt(v) => {
-                f.write_str("TINYINT")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::SmallInt(v) => {
-                f.write_str("SMALLINT")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::Int(v) => {
-                f.write_str("INT")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::BigInt(v) => {
-                f.write_str("BIGINT")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::VarChar((v, _)) => {
-                write!(f, "VARCHAR({})", v)?;
-            }
-            Type::TinyText(v) => {
-                f.write_str("TINYTEXT")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::MediumText(v) => {
-                f.write_str("MEDIUMTEXT")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::Text(v) => {
-                f.write_str("TEXT")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::LongText(v) => {
-                f.write_str("LONGTEXT")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::Enum(v) => {
-                f.write_str("ENUM(")?;
-                for (i, (v, _)) in v.iter().enumerate() {
-                    if i != 0 {
-                        f.write_str(", ")?;
-                    }
-                    write!(f, "{}", SingleQuotedString(v.as_ref()))?;
-                }
-                f.write_char(')')?;
-            }
-            Type::Set(v) => {
-                f.write_str("SET(")?;
-                for (i, (v, _)) in v.iter().enumerate() {
-                    if i != 0 {
-                        f.write_str(", ")?;
-                    }
-                    write!(f, "{}", SingleQuotedString(v.as_ref()))?;
-                }
-                f.write_char(')')?;
-            }
-            Type::Float(v) => {
-                f.write_str("FLOAT")?;
-                if let Some((v1, v2, _)) = v {
-                    write!(f, "({}, {})", v1, v2)?;
-                }
-            }
-            Type::Double(v) => {
-                f.write_str("DOUBLE")?;
-                if let Some((v1, v2, _)) = v {
-                    write!(f, "({}, {})", v1, v2)?;
-                }
-            }
-            Type::DateTime(v) => {
-                f.write_str("DATETIME")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::Timestamp(v) => {
-                f.write_str("TIMESTAMP")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::Time(v) => {
-                f.write_str("TIME")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::TinyBlob(v) => {
-                f.write_str("TINYBLOB")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::MediumBlob(v) => {
-                f.write_str("MEDIUMBLOB")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::Date => {
-                f.write_str("DATE")?;
-            }
-            Type::Blob(v) => {
-                f.write_str("BLOB")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::LongBlob(v) => {
-                f.write_str("LONGBLOB")?;
-                if let Some((v, _)) = v {
-                    write!(f, "({})", v)?;
-                }
-            }
-            Type::VarBinary((v, _)) => {
-                write!(f, "TINYINT({})", v)?;
-            }
-        }
-        Ok(())
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct DataType<'a> {
@@ -246,23 +88,23 @@ pub struct DataType<'a> {
     pub properties: Vec<DataTypeProperty<'a>>,
 }
 
-impl<'a> Display for DataType<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.type_)?;
-        for p in &self.properties {
-            write!(f, " {}", p)?;
-        }
-        Ok(())
-    }
-}
+// impl<'a> Display for DataType<'a> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.type_)?;
+//         for p in &self.properties {
+//             write!(f, " {}", p)?;
+//         }
+//         Ok(())
+//     }
+// }
 
-impl<'a> Spanned for DataType<'a> {
-    fn span(&self) -> Span {
-        self.properties
-            .iter()
-            .fold(self.identifier.span(), |a, b| a.join_span(b))
-    }
-}
+// impl<'a> Spanned for DataType<'a> {
+//     fn span(&self) -> Span {
+//         self.properties
+//             .iter()
+//             .fold(self.identifier.span(), |a, b| a.join_span(b))
+//     }
+// }
 
 fn parse_width(parser: &mut Parser<'_>) -> Result<Option<(usize, Span)>, ParseError> {
     if !matches!(parser.token, Token::LParen) {
@@ -430,10 +272,9 @@ pub(crate) fn parse_data_type<'a>(parser: &mut Parser<'a>) -> Result<DataType<'a
             }
             Token::Ident(_, Keyword::DEFAULT) => {
                 parser.consume_keyword(Keyword::DEFAULT)?;
-                //TODO if '(' parse an expression
-                properties.push(DataTypeProperty::Default(Box::new(Expression::Literal(
-                    parse_literal(parser)?,
-                ))));
+                properties.push(DataTypeProperty::Default(Box::new(
+                    parse_expression_bottom(parser)?
+                )));
             }
             //TODO default
             _ => break,
@@ -446,20 +287,4 @@ pub(crate) fn parse_data_type<'a>(parser: &mut Parser<'a>) -> Result<DataType<'a
         type_,
         properties,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::parser::Parser;
-
-    use super::parse_data_type;
-
-    #[test]
-    fn datatype() {
-        let src = "INT(44) NULL SIGNED DEFAULT 42 COMMENT 'monkey'";
-        let mut parser = Parser::new(src);
-        let ast = parse_data_type(&mut parser).unwrap();
-        assert!(parser.issues.is_empty());
-        assert_eq!(src, ast.to_string());
-    }
 }
