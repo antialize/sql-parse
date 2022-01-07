@@ -76,7 +76,7 @@ impl<'a> Parser<'a> {
             span,
             lexer,
             issues: Vec::new(),
-            arg: 0
+            arg: 0,
         }
     }
 
@@ -243,7 +243,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&mut self) -> Span {
+    pub(crate) fn consume(&mut self) -> Span {
         let span = self.span.clone();
         self.next();
         span

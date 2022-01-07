@@ -14,10 +14,13 @@ use std::borrow::Cow;
 
 use crate::{
     data_type::{parse_data_type, DataType},
+    delete::{parse_delete, Delete},
+    insert::{parse_insert, Insert},
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Span, select::{Select, parse_select},
+    select::{parse_select, Select},
+    Span,
 };
 
 #[derive(Clone, Debug)]
@@ -309,7 +312,9 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, P
 #[derive(Clone, Debug)]
 pub enum Statement<'a> {
     CreateTable(CreateTable<'a>),
-    Select(Select<'a>)
+    Select(Select<'a>),
+    Delete(Delete<'a>),
+    Insert(Insert<'a>),
 }
 
 pub(crate) fn parse_statement<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, ParseError> {
@@ -317,6 +322,8 @@ pub(crate) fn parse_statement<'a>(parser: &mut Parser<'a>) -> Result<Statement<'
         Token::Ident(_, Keyword::CREATE) => parse_create(parser),
         Token::Ident(_, Keyword::DROP) => parse_drop(parser),
         Token::Ident(_, Keyword::SELECT) => Ok(Statement::Select(parse_select(parser)?)),
+        Token::Ident(_, Keyword::DELETE) => Ok(Statement::Delete(parse_delete(parser)?)),
+        Token::Ident(_, Keyword::INSERT) => Ok(Statement::Insert(parse_insert(parser)?)),
         _ => parser.expected_failure("Statement"),
     }
 }

@@ -166,7 +166,7 @@ impl<'a> Lexer<'a> {
                         Token::DoubleAmpersand
                     }
                     _ => Token::Ampersand,
-                }
+                },
                 '^' => Token::Caret,
                 '{' => Token::LBrace,
                 '}' => Token::RBrace,

@@ -17,7 +17,7 @@ use std::{
 };
 
 use crate::{
-    expression::{parse_expression_bottom, Expression},
+    expression::{parse_expression, Expression},
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser, SingleQuotedString},
@@ -79,7 +79,6 @@ pub enum Type<'a> {
     LongBlob(Option<(usize, Span)>),
     VarBinary((usize, Span)),
 }
-
 
 #[derive(Debug, Clone)]
 pub struct DataType<'a> {
@@ -272,9 +271,9 @@ pub(crate) fn parse_data_type<'a>(parser: &mut Parser<'a>) -> Result<DataType<'a
             }
             Token::Ident(_, Keyword::DEFAULT) => {
                 parser.consume_keyword(Keyword::DEFAULT)?;
-                properties.push(DataTypeProperty::Default(Box::new(
-                    parse_expression_bottom(parser)?
-                )));
+                properties.push(DataTypeProperty::Default(Box::new(parse_expression(
+                    parser, true,
+                )?)));
             }
             //TODO default
             _ => break,

@@ -12,7 +12,9 @@
 
 use parser::Parser;
 mod data_type;
+mod delete;
 mod expression;
+mod insert;
 mod issue;
 mod keywords;
 mod lexer;
@@ -39,41 +41,50 @@ pub fn parse_statement(src: &str) -> (Option<Statement<'_>>, Vec<Issue>) {
     (statements.ok(), parser.issues)
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use codespan_reporting::{files::SimpleFiles, term::{termcolor::{StandardStream, ColorChoice}, self}, diagnostic::{self, Diagnostic, Label}};
+#[cfg(test)]
+mod tests {
 
-//     use crate::{parser::Parser, statement::parse_statements, issue::Level};
+    use codespan_reporting::{
+        diagnostic::{Diagnostic, Label},
+        files::SimpleFiles,
+        term::{
+            self,
+            termcolor::{ColorChoice, StandardStream},
+        },
+    };
 
-//     #[test]
-//     fn it_works() {
-//         let src = std::fs::read_to_string("../schema.sql").expect("Failed to read file");
-//         //let src = "int (22) null signed unsigned signed,";
-//         let mut parser = Parser::new(&src);
+    use crate::{issue::Level, parser::Parser, statement::parse_statements};
 
-//         let statements = parse_statements(&mut parser);
-//         //let dt = parse_data_type(&mut parser);
-//         //println!("{:#?}", statements);
+    #[test]
+    fn it_works() {
+        let src = std::fs::read_to_string("qs.sql").expect("Failed to read file");
+        //let src = "int (22) null signed unsigned signed,";
+        let mut parser = Parser::new(&src);
 
-//         if !parser.issues.is_empty() {
-//             let mut files = SimpleFiles::new();
-//             let file_id = files.add("schema.sql", &src);
-//             let writer = StandardStream::stderr(ColorChoice::Always);
-//             let config = codespan_reporting::term::Config::default();
-//             for issue in parser.issues {
-//                 let mut labels = Vec::new();
-//                 labels.push(Label::primary(file_id, issue.span));
-//                 for (message, span) in issue.fragments {
-//                     labels.push(Label::secondary(file_id, span).with_message(message));
-//                 }
-//                 let d = match issue.level {
-//                     Level::Error => Diagnostic::error(),
-//                     Level::Warning => Diagnostic::warning()
-//                 };
-//                 let d = d.with_message(issue.message).with_labels(labels);
-//                 term::emit(&mut writer.lock(), &config, &files, &d).unwrap();
-//             }
-//         }
-//         panic!();
-//     }
-// }
+        let statements = parse_statements(&mut parser);
+
+        //let dt = parse_data_type(&mut parser);
+        println!("{:#?}", parser.issues.len());
+
+        if !parser.issues.is_empty() {
+            let mut files = SimpleFiles::new();
+            let file_id = files.add("schema.sql", &src);
+            let writer = StandardStream::stderr(ColorChoice::Always);
+            let config = codespan_reporting::term::Config::default();
+            for issue in parser.issues {
+                let mut labels = vec![Label::primary(file_id, issue.span)];
+                for (message, span) in issue.fragments {
+                    labels.push(Label::secondary(file_id, span).with_message(message));
+                }
+                let d = match issue.level {
+                    Level::Error => Diagnostic::error(),
+                    Level::Warning => Diagnostic::warning(),
+                };
+                let d = d.with_message(issue.message).with_labels(labels);
+                term::emit(&mut writer.lock(), &config, &files, &d).unwrap();
+            }
+            panic!("HERE");
+        }
+        panic!();
+    }
+}
