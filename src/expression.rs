@@ -496,7 +496,7 @@ pub(crate) fn parse_expression<'a>(
                 r.shift_expr(Expression::Null(parser.consume_keyword(Keyword::NULL)?))
             }
 
-            Token::SingleQuotedString(_) => {
+            Token::SingleQuotedString(_) | Token::DoubleQuotedString(_) => {
                 r.shift_expr(Expression::String(parser.consume_string()?))
             }
             Token::Integer(_) => r.shift_expr(Expression::Integer(parser.consume_int()?)),

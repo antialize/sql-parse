@@ -20,6 +20,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
+    update::{parse_update, Update},
     Span,
 };
 
@@ -315,6 +316,7 @@ pub enum Statement<'a> {
     Select(Select<'a>),
     Delete(Delete<'a>),
     Insert(Insert<'a>),
+    Update(Update<'a>),
 }
 
 pub(crate) fn parse_statement<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, ParseError> {
@@ -324,6 +326,7 @@ pub(crate) fn parse_statement<'a>(parser: &mut Parser<'a>) -> Result<Statement<'
         Token::Ident(_, Keyword::SELECT) => Ok(Statement::Select(parse_select(parser)?)),
         Token::Ident(_, Keyword::DELETE) => Ok(Statement::Delete(parse_delete(parser)?)),
         Token::Ident(_, Keyword::INSERT) => Ok(Statement::Insert(parse_insert(parser)?)),
+        Token::Ident(_, Keyword::UPDATE) => Ok(Statement::Update(parse_update(parser)?)),
         _ => parser.expected_failure("Statement"),
     }
 }

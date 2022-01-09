@@ -16,7 +16,7 @@ use crate::{
     issue::{Issue, Level},
     keywords::Keyword,
     lexer::{Lexer, Token},
-    Span,
+    Span, Spanned,
 };
 
 #[derive(Debug)]
@@ -33,7 +33,27 @@ pub(crate) struct Parser<'a> {
 }
 
 pub(crate) fn decode_single_quoted_string(s: &str) -> Cow<'_, str> {
-    if !s.contains('\'') {
+    if !s.contains('\'') && !s.contains('\\') {
+        s.into()
+    } else {
+        let mut r = String::new();
+        let mut chars = s.chars();
+        loop {
+            match chars.next() {
+                None => break,
+                Some('\'') => {
+                    chars.next();
+                    r.push('\'');
+                }
+                Some(c) => r.push(c),
+            }
+        }
+        r.into()
+    }
+}
+
+pub(crate) fn decode_double_quoted_string(s: &str) -> Cow<'_, str> {
+    if !s.contains('"') && !s.contains('\\') {
         s.into()
     } else {
         let mut r = String::new();
@@ -250,15 +270,37 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn consume_string(&mut self) -> Result<(Cow<'a, str>, Span), ParseError> {
-        match &self.token {
+        let (mut a, mut b) = match &self.token {
             Token::SingleQuotedString(v) => {
                 let v = *v;
                 let span = self.span.clone();
                 self.next();
-                Ok((decode_single_quoted_string(v), span))
+                (decode_single_quoted_string(v), span)
             }
-            _ => self.expected_failure("string"),
+            Token::DoubleQuotedString(v) => {
+                let v = *v;
+                let span = self.span.clone();
+                self.next();
+                (decode_double_quoted_string(v), span)
+            }
+            _ => self.expected_failure("string")?,
+        };
+        loop {
+            match self.token {
+                Token::SingleQuotedString(v) => {
+                    b = b.join_span(&self.span);
+                    a.to_mut().push_str(decode_single_quoted_string(v).as_ref());
+                    self.next();
+                }
+                Token::DoubleQuotedString(v) => {
+                    b = b.join_span(&self.span);
+                    a.to_mut().push_str(decode_double_quoted_string(v).as_ref());
+                    self.next();
+                }
+                _ => break,
+            }
         }
+        Ok((a, b))
     }
 
     pub(crate) fn consume_int<T: std::str::FromStr + Default>(

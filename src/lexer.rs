@@ -56,6 +56,7 @@ pub enum Token<'a> {
     ShiftLeft,
     ShiftRight,
     SingleQuotedString(&'a str),
+    DoubleQuotedString(&'a str),
     Spaceship,
     Tilde,
     Eof,
@@ -107,6 +108,7 @@ impl<'a> Token<'a> {
             Token::ShiftLeft => "'>>'",
             Token::ShiftRight => "'<<'",
             Token::SingleQuotedString(_) => "String",
+            Token::DoubleQuotedString(_) => "String",
             Token::Spaceship => "'<=>'",
             Token::Tilde => "'~'",
             Token::Eof => "EndOfFile",
@@ -285,11 +287,29 @@ impl<'a> Lexer<'a> {
                 }
                 '\'' => loop {
                     match self.chars.next() {
+                        Some((_, '\\')) => {
+                            self.chars.next();
+                        }
                         Some((i, '\'')) => match self.chars.peek() {
                             Some((_, '\'')) => {
                                 self.chars.next();
                             }
                             _ => break Token::SingleQuotedString(self.s(start + 1..i)),
+                        },
+                        Some((_, _)) => (),
+                        None => break Token::Invalid,
+                    }
+                },
+                '"' => loop {
+                    match self.chars.next() {
+                        Some((_, '\\')) => {
+                            self.chars.next();
+                        }
+                        Some((i, '"')) => match self.chars.peek() {
+                            Some((_, '"')) => {
+                                self.chars.next();
+                            }
+                            _ => break Token::DoubleQuotedString(self.s(start + 1..i)),
                         },
                         Some((_, _)) => (),
                         None => break Token::Invalid,

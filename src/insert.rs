@@ -15,6 +15,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
+    select::{parse_select, Select},
     Span,
 };
 
@@ -32,8 +33,8 @@ pub struct Insert<'a> {
     pub flags: Vec<InsertFlag>,
     pub into_span: Option<Span>,
     pub table: Vec<(&'a str, Span)>,
-    pub values_span: Span,
-    pub values: Vec<Vec<Expression<'a>>>,
+    pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
+    pub select: Option<Select<'a>>,
 }
 
 pub(crate) fn parse_insert<'a>(parser: &mut Parser<'a>) -> Result<Insert<'a>, ParseError> {
@@ -82,30 +83,38 @@ pub(crate) fn parse_insert<'a>(parser: &mut Parser<'a>) -> Result<Insert<'a>, Pa
         parser.consume_token(Token::RParen)?;
     }
 
-    let values_span = match &parser.token {
-        Token::Ident(_, Keyword::VALUE) => parser.consume_keyword(Keyword::VALUE)?,
-        Token::Ident(_, Keyword::VALUES) => parser.consume_keyword(Keyword::VALUES)?,
-        _ => parser.expected_failure("'VALUES'")?,
-    };
+    let mut select = None;
+    let mut values = None;
+    if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
+        select = Some(parse_select(parser)?);
+    } else {
+        let values_span = match &parser.token {
+            Token::Ident(_, Keyword::VALUE) => parser.consume_keyword(Keyword::VALUE)?,
+            Token::Ident(_, Keyword::VALUES) => parser.consume_keyword(Keyword::VALUES)?,
+            _ => parser.expected_failure("'VALUES'")?,
+        };
 
-    let mut values = Vec::new();
-    loop {
-        let mut vals = Vec::new();
-        parser.consume_token(Token::LParen)?;
-        parser.recovered(")", &|t| t == &Token::RParen, |parser| {
-            loop {
-                vals.push(parse_expression(parser, false)?);
-                if parser.skip_token(Token::Comma).is_none() {
-                    break;
+        let mut values_items = Vec::new();
+        loop {
+            let mut vals = Vec::new();
+            parser.consume_token(Token::LParen)?;
+            parser.recovered(")", &|t| t == &Token::RParen, |parser| {
+                loop {
+                    vals.push(parse_expression(parser, false)?);
+                    if parser.skip_token(Token::Comma).is_none() {
+                        break;
+                    }
                 }
+                Ok(())
+            })?;
+            parser.consume_token(Token::RParen)?;
+            values_items.push(vals);
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
             }
-            Ok(())
-        })?;
-        parser.consume_token(Token::RParen)?;
-        values.push(vals);
-        if parser.skip_token(Token::Comma).is_none() {
-            break;
         }
+
+        values = Some((values_span, values_items));
     }
 
     //  [ ON DUPLICATE KEY UPDATE
@@ -118,7 +127,7 @@ pub(crate) fn parse_insert<'a>(parser: &mut Parser<'a>) -> Result<Insert<'a>, Pa
         insert_span,
         table,
         into_span,
-        values_span,
         values,
+        select,
     })
 }

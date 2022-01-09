@@ -22,6 +22,7 @@ mod parser;
 mod select;
 mod span;
 mod statement;
+mod update;
 
 pub use data_type::{DataType, DataTypeProperty, Type};
 pub use issue::{Issue, Level};
