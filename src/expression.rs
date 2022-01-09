@@ -15,70 +15,147 @@ use std::borrow::Cow;
 use crate::{
     keywords::Keyword,
     lexer::Token,
-    parser::{ParseError, Parser, SingleQuotedString},
+    parser::{ParseError, Parser},
     select::{parse_select, Select},
     Span, Spanned,
 };
 
 #[derive(Debug, Clone)]
 pub enum Function {
+    Abs,
+    Acos,
+    AddDate,
+    AddMonths,
+    AddTime,
     Ascii,
+    Asin,
+    Atan,
+    Atan2,
     Bin,
     BitLength,
+    Ceil,
     CharacterLength,
     Chr,
     Concat,
     ConcatWs,
+    Conv,
+    ConvertTs,
+    Cos,
+    Cot,
+    Count,
+    Crc32,
+    Crc32c,
+    CurDate,
+    CurrentTimestamp,
+    CurTime,
+    Date,
+    DateAdd,
+    DateDiff,
+    DateFormat,
+    DateSub,
+    DayName,
+    DayOfMonth,
+    DayOfWeek,
+    DayOfYear,
+    Degrees,
     Elt,
+    Exists,
+    Exp,
     ExportSet,
     ExtractValue,
     Field,
     FindInSet,
+    Floor,
     Format,
     FromBase64,
+    FromDays,
+    Greatest,
     Hex,
+    IfNull,
     Insert,
     InStr,
+    JsonExtract,
     LCase,
+    Least,
     Left,
     Length,
     LengthB,
+    Ln,
     LoadFile,
     Locate,
+    Log,
+    Log10,
+    Log2,
     Lower,
     LPad,
     LTrim,
+    MakeDate,
     MakeSet,
+    MakeTime,
+    MicroSecond,
     Mid,
+    Minute,
+    MonthName,
     NaturalSortkey,
+    Now,
+    Oct,
     OctetLength,
     Ord,
+    PeriodAdd,
+    PeriodDiff,
+    Pi,
     Position,
+    Pow,
+    Quarter,
     Quote,
+    Radians,
+    Rand,
     Repeat,
     Replace,
     Reverse,
     Right,
+    Round,
     RPad,
     RTrim,
+    Second,
+    SecToTime,
+    SFormat,
+    Sign,
+    Sin,
     SoundEx,
     Space,
+    Sqrt,
     StrCmp,
+    StrToDate,
+    SubDate,
     SubStr,
     SubStringIndex,
+    SubTime,
+    Tan,
+    Time,
+    TimeDiff,
+    TimeFormat,
+    Timestamp,
+    TimestampAdd,
+    TimestampDiff,
+    TimeToSec,
     ToBase64,
     ToChar,
+    ToDays,
+    ToSeconds,
+    Truncate,
     UCase,
     UncompressedLength,
     UnHex,
+    UnixTimestamp,
     UpdateXml,
     Upper,
-    SFormat,
-    CurrentTimestamp,
-    Count,
-    JsonExtract,
-    IfNull,
-    Exists,
+    UtcDate,
+    UtcTime,
+    UtcTimeStamp,
+    Week,
+    Weekday,
+    WeekOfYear,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -104,6 +181,8 @@ pub enum BinaryOperator {
     Div,
     Mod,
     Mult,
+    Like,
+    NotLike,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -128,6 +207,12 @@ pub enum UnaryOperator {
 }
 
 #[derive(Debug, Clone)]
+pub enum IdentifierPart<'a> {
+    Name((&'a str, Span)),
+    Star(Span),
+}
+
+#[derive(Debug, Clone)]
 pub enum Expression<'a> {
     Binary {
         op: BinaryOperator,
@@ -147,9 +232,8 @@ pub enum Expression<'a> {
     Integer((u64, Span)),
     Float((f64, Span)),
     Function(Function, Vec<Expression<'a>>, Span),
-    Identifier(Vec<(&'a str, Span)>),
+    Identifier(Vec<IdentifierPart<'a>>),
     Arg((usize, Span)),
-    Star(Span),
     In {
         lhs: Box<Expression<'a>>,
         rhs: Vec<Expression<'a>>,
@@ -174,17 +258,19 @@ pub(crate) fn parse_function<'a>(
         parser.consume_token(Token::LParen)?;
     };
     let mut args = Vec::new();
-    loop {
-        parser.recovered(
-            "')' or ','",
-            &|t| matches!(t, Token::RParen | Token::Comma),
-            |parser| {
-                args.push(parse_expression_outer(parser)?);
-                Ok(())
-            },
-        )?;
-        if parser.skip_token(Token::Comma).is_none() {
-            break;
+    if !matches!(parser.token, Token::RParen) {
+        loop {
+            parser.recovered(
+                "')' or ','",
+                &|t| matches!(t, Token::RParen | Token::Comma),
+                |parser| {
+                    args.push(parse_expression_outer(parser)?);
+                    Ok(())
+                },
+            )?;
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
         }
     }
     parser.consume_token(Token::RParen)?;
@@ -212,6 +298,8 @@ impl Priority for BinaryOperator {
             BinaryOperator::LtEq => 110,
             BinaryOperator::Lt => 110,
             BinaryOperator::Neq => 110,
+            BinaryOperator::Like => 110,
+            BinaryOperator::NotLike => 110,
             BinaryOperator::ShiftLeft => 80,
             BinaryOperator::ShiftRight => 80,
             BinaryOperator::BitAnd => 90,
@@ -478,12 +566,23 @@ pub(crate) fn parse_expression<'a>(
                             not_in: true,
                         })
                     }
+                    Token::Ident(_, Keyword::LIKE) => {
+                        r.shift_binop(parser.consume().join_span(&op), BinaryOperator::NotLike)
+                    }
                     _ => parser.expected_failure("'IN' or 'LIKE'")?,
                 }
             }
+            Token::Ident(_, Keyword::LIKE) if !inner => {
+                r.shift_binop(parser.consume(), BinaryOperator::Like)
+            }
             Token::Mul if !inner => {
-                r.shift_expr(Expression::Star(parser.consume_token(Token::Mul)?))
-            } //TODO
+                r.shift_expr(Expression::Identifier(vec![IdentifierPart::Star(
+                    parser.consume_token(Token::Mul)?,
+                )]))
+            }
+            Token::Mul if !inner && matches!(r.stack.last(), Some(ReduceMember::Expression(_))) => {
+                r.shift_binop(parser.consume(), BinaryOperator::Mult)
+            }
             Token::Ident(_, Keyword::TRUE) => r.shift_expr(Expression::Bool(
                 true,
                 parser.consume_keyword(Keyword::TRUE)?,
@@ -501,6 +600,8 @@ pub(crate) fn parse_expression<'a>(
             }
             Token::Integer(_) => r.shift_expr(Expression::Integer(parser.consume_int()?)),
             Token::Float(_) => r.shift_expr(Expression::Float(parser.consume_float()?)),
+
+            // https://mariadb.com/kb/en/string-functions/
             Token::Ident(_, Keyword::ASCII) => {
                 r.shift_expr(parse_function(parser, Function::Ascii, false)?)
             }
@@ -513,11 +614,9 @@ pub(crate) fn parse_expression<'a>(
             Token::Ident(_, Keyword::CHAR_LENGTH) => {
                 r.shift_expr(parse_function(parser, Function::CharacterLength, false)?)
             }
-
             Token::Ident(_, Keyword::CHARACTER_LENGTH) => {
                 r.shift_expr(parse_function(parser, Function::CharacterLength, false)?)
             }
-
             Token::Ident(_, Keyword::CHR) => {
                 r.shift_expr(parse_function(parser, Function::Chr, false)?)
             }
@@ -665,9 +764,8 @@ pub(crate) fn parse_expression<'a>(
             Token::Ident(_, Keyword::SFORMAT) => {
                 r.shift_expr(parse_function(parser, Function::SFormat, false)?)
             }
-            Token::Ident(_, Keyword::CURRENT_TIMESTAMP) => {
-                r.shift_expr(parse_function(parser, Function::CurrentTimestamp, true)?)
-            }
+
+            // TODO uncat
             Token::Ident(_, Keyword::COUNT) => {
                 r.shift_expr(parse_function(parser, Function::Count, false)?)
             }
@@ -680,13 +778,264 @@ pub(crate) fn parse_expression<'a>(
             Token::Ident(_, Keyword::EXISTS) => {
                 r.shift_expr(parse_function(parser, Function::Exists, false)?)
             }
+
+            //https://mariadb.com/kb/en/numeric-functions/
+            Token::Ident(_, Keyword::ABS) => {
+                r.shift_expr(parse_function(parser, Function::Abs, false)?)
+            }
+            Token::Ident(_, Keyword::ACOS) => {
+                r.shift_expr(parse_function(parser, Function::Acos, false)?)
+            }
+            Token::Ident(_, Keyword::ASIN) => {
+                r.shift_expr(parse_function(parser, Function::Asin, false)?)
+            }
+            Token::Ident(_, Keyword::ATAN) => {
+                r.shift_expr(parse_function(parser, Function::Atan, false)?)
+            }
+            Token::Ident(_, Keyword::ATAN2) => {
+                r.shift_expr(parse_function(parser, Function::Atan2, false)?)
+            }
+            Token::Ident(_, Keyword::CEIL | Keyword::CEILING) => {
+                r.shift_expr(parse_function(parser, Function::Ceil, false)?)
+            }
+            Token::Ident(_, Keyword::CONV) => {
+                r.shift_expr(parse_function(parser, Function::Conv, false)?)
+            }
+            Token::Ident(_, Keyword::COS) => {
+                r.shift_expr(parse_function(parser, Function::Cos, false)?)
+            }
+            Token::Ident(_, Keyword::COT) => {
+                r.shift_expr(parse_function(parser, Function::Cot, false)?)
+            }
+            Token::Ident(_, Keyword::CRC32) => {
+                r.shift_expr(parse_function(parser, Function::Crc32, false)?)
+            }
+            Token::Ident(_, Keyword::DEGREES) => {
+                r.shift_expr(parse_function(parser, Function::Degrees, false)?)
+            }
+            Token::Ident(_, Keyword::EXP) => {
+                r.shift_expr(parse_function(parser, Function::Exp, false)?)
+            }
+            Token::Ident(_, Keyword::FLOOR) => {
+                r.shift_expr(parse_function(parser, Function::Floor, false)?)
+            }
+            Token::Ident(_, Keyword::GREATEST) => {
+                r.shift_expr(parse_function(parser, Function::Greatest, false)?)
+            }
+            Token::Ident(_, Keyword::LN) => {
+                r.shift_expr(parse_function(parser, Function::Ln, false)?)
+            }
+            Token::Ident(_, Keyword::LOG) => {
+                r.shift_expr(parse_function(parser, Function::Log, false)?)
+            }
+            Token::Ident(_, Keyword::LOG10) => {
+                r.shift_expr(parse_function(parser, Function::Log10, false)?)
+            }
+            Token::Ident(_, Keyword::LOG2) => {
+                r.shift_expr(parse_function(parser, Function::Log2, false)?)
+            }
+            Token::Ident(_, Keyword::OCT) => {
+                r.shift_expr(parse_function(parser, Function::Oct, false)?)
+            }
+            Token::Ident(_, Keyword::PI) => {
+                r.shift_expr(parse_function(parser, Function::Pi, false)?)
+            }
+            Token::Ident(_, Keyword::POW | Keyword::POWER) => {
+                r.shift_expr(parse_function(parser, Function::Pow, false)?)
+            }
+            Token::Ident(_, Keyword::RADIANS) => {
+                r.shift_expr(parse_function(parser, Function::Radians, false)?)
+            }
+            Token::Ident(_, Keyword::RAND) => {
+                r.shift_expr(parse_function(parser, Function::Rand, false)?)
+            }
+            Token::Ident(_, Keyword::ROUND) => {
+                r.shift_expr(parse_function(parser, Function::Round, false)?)
+            }
+            Token::Ident(_, Keyword::SIGN) => {
+                r.shift_expr(parse_function(parser, Function::Sign, false)?)
+            }
+            Token::Ident(_, Keyword::SIN) => {
+                r.shift_expr(parse_function(parser, Function::Sin, false)?)
+            }
+            Token::Ident(_, Keyword::SQRT) => {
+                r.shift_expr(parse_function(parser, Function::Sqrt, false)?)
+            }
+            Token::Ident(_, Keyword::TAN) => {
+                r.shift_expr(parse_function(parser, Function::Tan, false)?)
+            }
+            Token::Ident(_, Keyword::TRUNCATE) => {
+                r.shift_expr(parse_function(parser, Function::Truncate, false)?)
+            }
+            Token::Ident(_, Keyword::CRC32C) => {
+                r.shift_expr(parse_function(parser, Function::Crc32c, false)?)
+            }
+
+            // https://mariadb.com/kb/en/date-time-functions/
+            Token::Ident(_, Keyword::ADDDATE) => {
+                r.shift_expr(parse_function(parser, Function::AddDate, false)?)
+            }
+            Token::Ident(_, Keyword::ADDTIME) => {
+                r.shift_expr(parse_function(parser, Function::AddTime, false)?)
+            }
+            Token::Ident(_, Keyword::CONVERT_TS) => {
+                r.shift_expr(parse_function(parser, Function::ConvertTs, false)?)
+            }
+            Token::Ident(_, Keyword::CURDATE) => {
+                r.shift_expr(parse_function(parser, Function::CurDate, false)?)
+            }
+            Token::Ident(_, Keyword::CURRENT_DATE) => {
+                r.shift_expr(parse_function(parser, Function::CurDate, true)?)
+            }
+            Token::Ident(_, Keyword::CURRENT_TIME) => {
+                r.shift_expr(parse_function(parser, Function::CurTime, true)?)
+            }
+            Token::Ident(_, Keyword::CURTIME) => {
+                r.shift_expr(parse_function(parser, Function::CurTime, false)?)
+            }
+            Token::Ident(_, Keyword::DATE) => {
+                r.shift_expr(parse_function(parser, Function::Date, false)?)
+            }
+            Token::Ident(_, Keyword::DATEDIFF) => {
+                r.shift_expr(parse_function(parser, Function::DateDiff, false)?)
+            }
+            Token::Ident(_, Keyword::DATE_ADD) => {
+                r.shift_expr(parse_function(parser, Function::DateAdd, false)?)
+            }
+            Token::Ident(_, Keyword::DATE_FORMAT) => {
+                r.shift_expr(parse_function(parser, Function::DateFormat, false)?)
+            }
+            Token::Ident(_, Keyword::DATE_SUB) => {
+                r.shift_expr(parse_function(parser, Function::DateSub, false)?)
+            }
+            Token::Ident(_, Keyword::DAY | Keyword::DAYOFMONTH) => {
+                r.shift_expr(parse_function(parser, Function::DayOfMonth, false)?)
+            }
+            Token::Ident(_, Keyword::DAYNAME) => {
+                r.shift_expr(parse_function(parser, Function::DayName, false)?)
+            }
+            Token::Ident(_, Keyword::DAYOFWEEK) => {
+                r.shift_expr(parse_function(parser, Function::DayOfWeek, false)?)
+            }
+            Token::Ident(_, Keyword::DAYOFYEAR) => {
+                r.shift_expr(parse_function(parser, Function::DayOfYear, false)?)
+            }
+            Token::Ident(_, Keyword::FROM_DAYS) => {
+                r.shift_expr(parse_function(parser, Function::FromDays, false)?)
+            }
+            Token::Ident(
+                _,
+                Keyword::LOCALTIME | Keyword::LOCALTIMESTAMP | Keyword::CURRENT_TIMESTAMP,
+            ) => r.shift_expr(parse_function(parser, Function::Now, true)?),
+            Token::Ident(_, Keyword::MAKEDATE) => {
+                r.shift_expr(parse_function(parser, Function::MakeDate, false)?)
+            }
+            Token::Ident(_, Keyword::MAKETIME) => {
+                r.shift_expr(parse_function(parser, Function::MakeTime, false)?)
+            }
+            Token::Ident(_, Keyword::MICROSECOND) => {
+                r.shift_expr(parse_function(parser, Function::MicroSecond, false)?)
+            }
+            Token::Ident(_, Keyword::MINUTE) => {
+                r.shift_expr(parse_function(parser, Function::Minute, false)?)
+            }
+            Token::Ident(_, Keyword::MONTHNAME) => {
+                r.shift_expr(parse_function(parser, Function::MonthName, false)?)
+            }
+            Token::Ident(_, Keyword::NOW) => {
+                r.shift_expr(parse_function(parser, Function::Now, false)?)
+            }
+            Token::Ident(_, Keyword::PERIOD_ADD) => {
+                r.shift_expr(parse_function(parser, Function::PeriodAdd, false)?)
+            }
+            Token::Ident(_, Keyword::PERIOD_DIFF) => {
+                r.shift_expr(parse_function(parser, Function::PeriodDiff, false)?)
+            }
+            Token::Ident(_, Keyword::QUARTER) => {
+                r.shift_expr(parse_function(parser, Function::Quarter, false)?)
+            }
+            Token::Ident(_, Keyword::SECOND) => {
+                r.shift_expr(parse_function(parser, Function::Second, false)?)
+            }
+            Token::Ident(_, Keyword::SEC_TO_TIME) => {
+                r.shift_expr(parse_function(parser, Function::SecToTime, false)?)
+            }
+            Token::Ident(_, Keyword::STR_TO_DATE) => {
+                r.shift_expr(parse_function(parser, Function::StrToDate, false)?)
+            }
+            Token::Ident(_, Keyword::SUBDATE) => {
+                r.shift_expr(parse_function(parser, Function::SubDate, false)?)
+            }
+            Token::Ident(_, Keyword::SUBTIME) => {
+                r.shift_expr(parse_function(parser, Function::SubTime, false)?)
+            }
+            Token::Ident(_, Keyword::TIME) => {
+                r.shift_expr(parse_function(parser, Function::Time, true)?)
+            }
+            Token::Ident(_, Keyword::TIMEDIFF) => {
+                r.shift_expr(parse_function(parser, Function::TimeDiff, false)?)
+            }
+            Token::Ident(_, Keyword::TIMESTAMP) => {
+                r.shift_expr(parse_function(parser, Function::Timestamp, true)?)
+            }
+            Token::Ident(_, Keyword::TIMESTAMPADD) => {
+                r.shift_expr(parse_function(parser, Function::TimestampAdd, false)?)
+            }
+            Token::Ident(_, Keyword::TIMESTAMPDIFF) => {
+                r.shift_expr(parse_function(parser, Function::TimestampDiff, false)?)
+            }
+            Token::Ident(_, Keyword::TIME_FORMAT) => {
+                r.shift_expr(parse_function(parser, Function::TimeFormat, false)?)
+            }
+            Token::Ident(_, Keyword::TIME_TO_SEC) => {
+                r.shift_expr(parse_function(parser, Function::TimeToSec, false)?)
+            }
+            Token::Ident(_, Keyword::TO_DAYS) => {
+                r.shift_expr(parse_function(parser, Function::ToDays, false)?)
+            }
+            Token::Ident(_, Keyword::TO_SECONDS) => {
+                r.shift_expr(parse_function(parser, Function::ToSeconds, false)?)
+            }
+            Token::Ident(_, Keyword::UNIX_TIMESTAMP) => {
+                r.shift_expr(parse_function(parser, Function::UnixTimestamp, false)?)
+            }
+            Token::Ident(_, Keyword::UTC_DATE) => {
+                r.shift_expr(parse_function(parser, Function::UtcDate, false)?)
+            }
+            Token::Ident(_, Keyword::UTC_TIME) => {
+                r.shift_expr(parse_function(parser, Function::UtcTime, false)?)
+            }
+            Token::Ident(_, Keyword::UTC_TIMESTAMP) => {
+                r.shift_expr(parse_function(parser, Function::UtcTimeStamp, false)?)
+            }
+            Token::Ident(_, Keyword::WEEK) => {
+                r.shift_expr(parse_function(parser, Function::Week, false)?)
+            }
+            Token::Ident(_, Keyword::WEEKDAY) => {
+                r.shift_expr(parse_function(parser, Function::Weekday, false)?)
+            }
+            Token::Ident(_, Keyword::WEEKOFYEAR) => {
+                r.shift_expr(parse_function(parser, Function::WeekOfYear, false)?)
+            }
+            Token::Ident(_, Keyword::ADD_MONTHS) => {
+                r.shift_expr(parse_function(parser, Function::AddMonths, false)?)
+            }
+
             Token::Ident(_, k) if !k.reserved() => {
-                let mut parts = vec![parser.consume_plain_identifier()?];
+                let mut parts = vec![IdentifierPart::Name(parser.consume_plain_identifier()?)];
                 loop {
                     if parser.skip_token(Token::Period).is_none() {
                         break;
                     }
-                    parts.push(parser.consume_plain_identifier()?);
+                    match &parser.token {
+                        Token::Mul => {
+                            parts.push(IdentifierPart::Star(parser.consume_token(Token::Mul)?))
+                        }
+                        Token::Ident(_, _) => {
+                            parts.push(IdentifierPart::Name(parser.consume_plain_identifier()?))
+                        }
+                        _ => parser.expected_failure("Identifier or '*'")?,
+                    }
                 }
                 r.shift_expr(Expression::Identifier(parts))
             }

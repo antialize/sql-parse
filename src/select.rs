@@ -251,6 +251,13 @@ pub enum SelectFlag {
 }
 
 #[derive(Debug, Clone)]
+pub enum OrderFlag {
+    Asc(Span),
+    Desc(Span),
+    None,
+}
+
+#[derive(Debug, Clone)]
 pub struct Select<'a> {
     pub select_span: Span,
     pub flags: Vec<SelectFlag>,
@@ -261,8 +268,8 @@ pub struct Select<'a> {
     pub group_by: Option<(Span, Vec<Expression<'a>>)>,
     pub having_span: Option<Span>,
     pub window_span: Option<Span>,
-    pub order_by_span: Option<Span>,
-    pub limit_span: Option<Span>,
+    pub order_by: Option<(Span, Vec<(Expression<'a>, OrderFlag)>)>,
+    pub limit: Option<(Span, Option<Expression<'a>>, Expression<'a>)>,
 }
 
 pub(crate) fn parse_select<'a>(parser: &mut Parser<'a>) -> Result<Select<'a>, ParseError> {
@@ -375,17 +382,42 @@ pub(crate) fn parse_select<'a>(parser: &mut Parser<'a>) -> Result<Select<'a>, Pa
         //TODO window_name AS (window_spec) [, window_name AS (window_spec)] ...]
     }
 
-    let mut order_by_span = None;
-    if let Some(order_span) = parser.skip_keyword(Keyword::ORDER) {
-        order_by_span = Some(parser.consume_keyword(Keyword::BY)?.join_span(&order_span));
-        // TODO {col_name | expr | position}
-        //   [ASC | DESC], ... [WITH ROLLUP]]
-    }
+    let order_by = if let Some(span) = parser.skip_keyword(Keyword::ORDER) {
+        let span = parser.consume_keyword(Keyword::BY)?.join_span(&span);
+        let mut order = Vec::new();
+        loop {
+            let e = parse_expression(parser, false)?;
+            let f = match &parser.token {
+                Token::Ident(_, Keyword::ASC) => OrderFlag::Asc(parser.consume()),
+                Token::Ident(_, Keyword::DESC) => OrderFlag::Desc(parser.consume()),
+                _ => OrderFlag::None,
+            };
+            order.push((e, f));
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        Some((span, order))
+    } else {
+        None
+    };
 
-    let limit_span = parser.skip_keyword(Keyword::LIMIT);
-    if limit_span.is_some() {
-        //TODO {[offset,] row_count | row_count OFFSET offset}]
-    }
+    let limit = if let Some(span) = parser.skip_keyword(Keyword::LIMIT) {
+        let n = parse_expression(parser, true)?;
+        match parser.token {
+            Token::Comma => {
+                parser.consume();
+                Some((span, Some(n), parse_expression(parser, true)?))
+            }
+            Token::Ident(_, Keyword::OFFSET) => {
+                parser.consume();
+                Some((span, Some(parse_expression(parser, true)?), n))
+            }
+            _ => Some((span, None, n)),
+        }
+    } else {
+        None
+    };
     // TODO [into_option]
     // [FOR {UPDATE | SHARE}
     //     [OF tbl_name [, tbl_name] ...]
@@ -411,7 +443,7 @@ pub(crate) fn parse_select<'a>(parser: &mut Parser<'a>) -> Result<Select<'a>, Pa
         group_by,
         having_span,
         window_span,
-        order_by_span,
-        limit_span,
+        order_by,
+        limit,
     })
 }
