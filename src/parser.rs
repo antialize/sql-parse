@@ -193,6 +193,36 @@ impl<'a> Parser<'a> {
         Err(ParseError::Unrecovered)
     }
 
+    pub(crate) fn token_to_plain_identifier(
+        &mut self,
+        token: &Token<'a>,
+        span: Span,
+    ) -> Result<(&'a str, Span), ParseError> {
+        match &token {
+            Token::Ident(v, kw) => {
+                let v = *v;
+                if kw.reserved() {
+                    self.issues.push(Issue {
+                        level: Level::Error,
+                        message: format!("'{}' is a reserved identifier use `{}`", v, v),
+                        span: span.clone(),
+                        fragments: Vec::new(),
+                    });
+                }
+                if kw == &Keyword::NOT_A_KEYWORD {
+                    // self.issues.push(Issue{
+                    //     level: Level::Warning,
+                    //     message: format!("identifiers should be quoted as `{}`", v),
+                    //     span: self.span.clone(),
+                    //     fragments: Vec::new(),
+                    // })
+                }
+                Ok((v, span))
+            }
+            _ => self.expected_failure("identifier"),
+        }
+    }
+
     pub(crate) fn consume_plain_identifier(&mut self) -> Result<(&'a str, Span), ParseError> {
         match &self.token {
             Token::Ident(v, kw) => {
@@ -213,9 +243,7 @@ impl<'a> Parser<'a> {
                     //     fragments: Vec::new(),
                     // })
                 }
-                let span = self.span.clone();
-                self.next();
-                Ok((v, span))
+                Ok((v, self.consume()))
             }
             _ => self.expected_failure("identifier"),
         }

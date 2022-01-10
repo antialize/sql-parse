@@ -17,7 +17,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
-    Span, Spanned,
+    Level, Span, Spanned,
 };
 
 #[derive(Debug, Clone)]
@@ -74,7 +74,39 @@ pub enum Function {
     IfNull,
     Insert,
     InStr,
+    JsonArray,
+    JsonArrayAgg,
+    JsonArrayAppend,
+    JsonArrayInsert,
+    JsonCompact,
+    JsonContains,
+    JsonContainsPath,
+    JsonDepth,
+    JsonDetailed,
+    JsonEquals,
+    JsonExists,
     JsonExtract,
+    JsonInsert,
+    JsonKeys,
+    JsonLength,
+    JsonLoose,
+    JsonMerge,
+    JsonMergePath,
+    JsonMergePerserve,
+    JsonNormalize,
+    JsonObject,
+    JsonObjectAgg,
+    JsonQoute,
+    JsonQuery,
+    JsonRemove,
+    JsonReplace,
+    JsonSearch,
+    JsonSet,
+    JsonTable,
+    JsonType,
+    JsonUnquote,
+    JsonValid,
+    JsonValue,
     LCase,
     Least,
     Left,
@@ -148,6 +180,7 @@ pub enum Function {
     UncompressedLength,
     UnHex,
     UnixTimestamp,
+    Unknown,
     UpdateXml,
     Upper,
     UtcDate,
@@ -234,6 +267,7 @@ pub enum Expression<'a> {
     Function(Function, Vec<Expression<'a>>, Span),
     Identifier(Vec<IdentifierPart<'a>>),
     Arg((usize, Span)),
+    Exists(Box<Select<'a>>),
     In {
         lhs: Box<Expression<'a>>,
         rhs: Vec<Expression<'a>>,
@@ -243,20 +277,206 @@ pub enum Expression<'a> {
     Is(Box<Expression<'a>>, Is, Span),
 }
 
-pub(crate) fn parse_function<'a>(
+fn parse_function<'a>(
     parser: &mut Parser<'a>,
-    func: Function,
-    allow_no_args: bool,
+    t: Token,
+    span: Span,
 ) -> Result<Expression<'a>, ParseError> {
-    let span = parser.consume();
+    parser.consume_token(Token::LParen)?;
+    let func = match &t {
+        // https://mariadb.com/kb/en/string-functions/
+        Token::Ident(_, Keyword::ASCII) => Function::Ascii,
+        Token::Ident(_, Keyword::BIN) => Function::Bin,
+        Token::Ident(_, Keyword::BIT_LENGTH) => Function::BitLength,
+        Token::Ident(_, Keyword::CHAR_LENGTH) => Function::CharacterLength,
+        Token::Ident(_, Keyword::CHARACTER_LENGTH) => Function::CharacterLength,
+        Token::Ident(_, Keyword::CHR) => Function::Chr,
+        Token::Ident(_, Keyword::CONCAT) => Function::Concat,
+        Token::Ident(_, Keyword::CONCAT_WS) => Function::ConcatWs,
+        Token::Ident(_, Keyword::ELT) => Function::Elt,
+        Token::Ident(_, Keyword::EXPORT_SET) => Function::ExportSet,
+        Token::Ident(_, Keyword::EXTRACTVALUE) => Function::ExtractValue,
+        Token::Ident(_, Keyword::FIELD) => Function::Field,
+        Token::Ident(_, Keyword::FIND_IN_SET) => Function::FindInSet,
+        Token::Ident(_, Keyword::FORMAT) => Function::Format,
+        Token::Ident(_, Keyword::FROM_BASE64) => Function::FromBase64,
+        Token::Ident(_, Keyword::HEX) => Function::Hex,
+        Token::Ident(_, Keyword::INSERT) => Function::Insert,
+        Token::Ident(_, Keyword::INSTR) => Function::InStr,
+        Token::Ident(_, Keyword::LCASE) => Function::LCase,
+        Token::Ident(_, Keyword::LEFT) => Function::Left,
+        Token::Ident(_, Keyword::LENGTH) => Function::Length,
+        Token::Ident(_, Keyword::LENGTHB) => Function::LengthB,
+        Token::Ident(_, Keyword::LOAD_FILE) => Function::LoadFile,
+        Token::Ident(_, Keyword::LOCATE) => Function::Locate,
+        Token::Ident(_, Keyword::LOWER) => Function::Lower,
+        Token::Ident(_, Keyword::LPAD) => Function::LPad,
+        Token::Ident(_, Keyword::LTRIM) => Function::LTrim,
+        Token::Ident(_, Keyword::MAKE_SET) => Function::MakeSet,
+        Token::Ident(_, Keyword::MID) => Function::Mid,
+        Token::Ident(_, Keyword::NATURAL_SORT_KEY) => Function::NaturalSortkey,
+        Token::Ident(_, Keyword::OCTET_LENGTH) => Function::OctetLength,
+        Token::Ident(_, Keyword::ORD) => Function::Ord,
+        Token::Ident(_, Keyword::POSITION) => Function::Position,
+        Token::Ident(_, Keyword::QUOTE) => Function::Quote,
+        Token::Ident(_, Keyword::REPEAT) => Function::Repeat,
+        Token::Ident(_, Keyword::REPLACE) => Function::Replace,
+        Token::Ident(_, Keyword::REVERSE) => Function::Reverse,
+        Token::Ident(_, Keyword::RIGHT) => Function::Right,
+        Token::Ident(_, Keyword::RPAD) => Function::RPad,
+        Token::Ident(_, Keyword::RTRIM) => Function::RTrim,
+        Token::Ident(_, Keyword::SOUNDEX) => Function::SoundEx,
+        Token::Ident(_, Keyword::SPACE) => Function::Space,
+        Token::Ident(_, Keyword::STRCMP) => Function::StrCmp,
+        Token::Ident(_, Keyword::SUBSTR) => Function::SubStr,
+        Token::Ident(_, Keyword::SUBSTRING) => Function::SubStr,
+        Token::Ident(_, Keyword::SUBSTRING_INDEX) => Function::SubStringIndex,
+        Token::Ident(_, Keyword::TO_BASE64) => Function::ToBase64,
+        Token::Ident(_, Keyword::TO_CHAR) => Function::ToChar,
+        Token::Ident(_, Keyword::UCASE) => Function::UCase,
+        Token::Ident(_, Keyword::UNCOMPRESSED_LENGTH) => Function::UncompressedLength,
+        Token::Ident(_, Keyword::UNHEX) => Function::UnHex,
+        Token::Ident(_, Keyword::UPDATEXML) => Function::UpdateXml,
+        Token::Ident(_, Keyword::UPPER) => Function::Upper,
+        Token::Ident(_, Keyword::SFORMAT) => Function::SFormat,
 
-    if allow_no_args {
-        if parser.skip_token(Token::LParen).is_none() {
-            return Ok(Expression::Function(func, Vec::new(), span));
+        // TODO uncat
+        Token::Ident(_, Keyword::COUNT) => Function::Count,
+        Token::Ident(_, Keyword::IFNULL) => Function::IfNull,
+        Token::Ident(_, Keyword::EXISTS) => Function::Exists,
+
+        //https://mariadb.com/kb/en/numeric-functions/
+        Token::Ident(_, Keyword::ABS) => Function::Abs,
+        Token::Ident(_, Keyword::ACOS) => Function::Acos,
+        Token::Ident(_, Keyword::ASIN) => Function::Asin,
+        Token::Ident(_, Keyword::ATAN) => Function::Atan,
+        Token::Ident(_, Keyword::ATAN2) => Function::Atan2,
+        Token::Ident(_, Keyword::CEIL | Keyword::CEILING) => Function::Ceil,
+        Token::Ident(_, Keyword::CONV) => Function::Conv,
+        Token::Ident(_, Keyword::COS) => Function::Cos,
+        Token::Ident(_, Keyword::COT) => Function::Cot,
+        Token::Ident(_, Keyword::CRC32) => Function::Crc32,
+        Token::Ident(_, Keyword::DEGREES) => Function::Degrees,
+        Token::Ident(_, Keyword::EXP) => Function::Exp,
+        Token::Ident(_, Keyword::FLOOR) => Function::Floor,
+        Token::Ident(_, Keyword::GREATEST) => Function::Greatest,
+        Token::Ident(_, Keyword::LN) => Function::Ln,
+        Token::Ident(_, Keyword::LOG) => Function::Log,
+        Token::Ident(_, Keyword::LOG10) => Function::Log10,
+        Token::Ident(_, Keyword::LOG2) => Function::Log2,
+        Token::Ident(_, Keyword::OCT) => Function::Oct,
+        Token::Ident(_, Keyword::PI) => Function::Pi,
+        Token::Ident(_, Keyword::POW | Keyword::POWER) => Function::Pow,
+        Token::Ident(_, Keyword::RADIANS) => Function::Radians,
+        Token::Ident(_, Keyword::RAND) => Function::Rand,
+        Token::Ident(_, Keyword::ROUND) => Function::Round,
+        Token::Ident(_, Keyword::SIGN) => Function::Sign,
+        Token::Ident(_, Keyword::SIN) => Function::Sin,
+        Token::Ident(_, Keyword::SQRT) => Function::Sqrt,
+        Token::Ident(_, Keyword::TAN) => Function::Tan,
+        Token::Ident(_, Keyword::TRUNCATE) => Function::Truncate,
+        Token::Ident(_, Keyword::CRC32C) => Function::Crc32c,
+
+        // https://mariadb.com/kb/en/date-time-functions/
+        Token::Ident(_, Keyword::ADDDATE) => Function::AddDate,
+        Token::Ident(_, Keyword::ADDTIME) => Function::AddTime,
+        Token::Ident(_, Keyword::CONVERT_TS) => Function::ConvertTs,
+        Token::Ident(_, Keyword::CURDATE) => Function::CurDate,
+        Token::Ident(_, Keyword::CURRENT_DATE) => Function::CurDate,
+        Token::Ident(_, Keyword::CURRENT_TIME) => Function::CurTime,
+        Token::Ident(_, Keyword::CURTIME) => Function::CurTime,
+        Token::Ident(_, Keyword::DATE) => Function::Date,
+        Token::Ident(_, Keyword::DATEDIFF) => Function::DateDiff,
+        Token::Ident(_, Keyword::DATE_ADD) => Function::DateAdd,
+        Token::Ident(_, Keyword::DATE_FORMAT) => Function::DateFormat,
+        Token::Ident(_, Keyword::DATE_SUB) => Function::DateSub,
+        Token::Ident(_, Keyword::DAY | Keyword::DAYOFMONTH) => Function::DayOfMonth,
+        Token::Ident(_, Keyword::DAYNAME) => Function::DayName,
+        Token::Ident(_, Keyword::DAYOFWEEK) => Function::DayOfWeek,
+        Token::Ident(_, Keyword::DAYOFYEAR) => Function::DayOfYear,
+        Token::Ident(_, Keyword::FROM_DAYS) => Function::FromDays,
+        Token::Ident(
+            _,
+            Keyword::LOCALTIME | Keyword::LOCALTIMESTAMP | Keyword::CURRENT_TIMESTAMP,
+        ) => Function::Now,
+        Token::Ident(_, Keyword::MAKEDATE) => Function::MakeDate,
+        Token::Ident(_, Keyword::MAKETIME) => Function::MakeTime,
+        Token::Ident(_, Keyword::MICROSECOND) => Function::MicroSecond,
+        Token::Ident(_, Keyword::MINUTE) => Function::Minute,
+        Token::Ident(_, Keyword::MONTHNAME) => Function::MonthName,
+        Token::Ident(_, Keyword::NOW) => Function::Now,
+        Token::Ident(_, Keyword::PERIOD_ADD) => Function::PeriodAdd,
+        Token::Ident(_, Keyword::PERIOD_DIFF) => Function::PeriodDiff,
+        Token::Ident(_, Keyword::QUARTER) => Function::Quarter,
+        Token::Ident(_, Keyword::SECOND) => Function::Second,
+        Token::Ident(_, Keyword::SEC_TO_TIME) => Function::SecToTime,
+        Token::Ident(_, Keyword::STR_TO_DATE) => Function::StrToDate,
+        Token::Ident(_, Keyword::SUBDATE) => Function::SubDate,
+        Token::Ident(_, Keyword::SUBTIME) => Function::SubTime,
+        Token::Ident(_, Keyword::TIME) => Function::Time,
+        Token::Ident(_, Keyword::TIMEDIFF) => Function::TimeDiff,
+        Token::Ident(_, Keyword::TIMESTAMP) => Function::Timestamp,
+        Token::Ident(_, Keyword::TIMESTAMPADD) => Function::TimestampAdd,
+        Token::Ident(_, Keyword::TIMESTAMPDIFF) => Function::TimestampDiff,
+        Token::Ident(_, Keyword::TIME_FORMAT) => Function::TimeFormat,
+        Token::Ident(_, Keyword::TIME_TO_SEC) => Function::TimeToSec,
+        Token::Ident(_, Keyword::TO_DAYS) => Function::ToDays,
+        Token::Ident(_, Keyword::TO_SECONDS) => Function::ToSeconds,
+        Token::Ident(_, Keyword::UNIX_TIMESTAMP) => Function::UnixTimestamp,
+        Token::Ident(_, Keyword::UTC_DATE) => Function::UtcDate,
+        Token::Ident(_, Keyword::UTC_TIME) => Function::UtcTime,
+        Token::Ident(_, Keyword::UTC_TIMESTAMP) => Function::UtcTimeStamp,
+        Token::Ident(_, Keyword::WEEK) => Function::Week,
+        Token::Ident(_, Keyword::WEEKDAY) => Function::Weekday,
+        Token::Ident(_, Keyword::WEEKOFYEAR) => Function::WeekOfYear,
+        Token::Ident(_, Keyword::ADD_MONTHS) => Function::AddMonths,
+
+        // https://mariadb.com/kb/en/json-functions/
+        Token::Ident(_, Keyword::JSON_ARRAY) => Function::JsonArray,
+        Token::Ident(_, Keyword::JSON_ARRAYAGG) => Function::JsonArrayAgg,
+        Token::Ident(_, Keyword::JSON_ARRAY_APPEND) => Function::JsonArrayAppend,
+        Token::Ident(_, Keyword::JSON_ARRAY_INSERT) => Function::JsonArrayInsert,
+        Token::Ident(_, Keyword::JSON_COMPACT) => Function::JsonCompact,
+        Token::Ident(_, Keyword::JSON_CONTAINS) => Function::JsonContains,
+        Token::Ident(_, Keyword::JSON_CONTAINS_PATH) => Function::JsonContainsPath,
+        Token::Ident(_, Keyword::JSON_DEPTH) => Function::JsonDepth,
+        Token::Ident(_, Keyword::JSON_DETAILED) => Function::JsonDetailed,
+        Token::Ident(_, Keyword::JSON_EQUALS) => Function::JsonEquals,
+        Token::Ident(_, Keyword::JSON_EXISTS) => Function::JsonExists,
+        Token::Ident(_, Keyword::JSON_EXTRACT) => Function::JsonExtract,
+        Token::Ident(_, Keyword::JSON_INSERT) => Function::JsonInsert,
+        Token::Ident(_, Keyword::JSON_KEYS) => Function::JsonKeys,
+        Token::Ident(_, Keyword::JSON_LENGTH) => Function::JsonLength,
+        Token::Ident(_, Keyword::JSON_LOOSE) => Function::JsonLoose,
+        Token::Ident(_, Keyword::JSON_MERGE) => Function::JsonMerge,
+        Token::Ident(_, Keyword::JSON_MERGE_PATCH) => Function::JsonMergePath,
+        Token::Ident(_, Keyword::JSON_MERGE_PRESERVE) => Function::JsonMergePerserve,
+        Token::Ident(_, Keyword::JSON_NORMALIZE) => Function::JsonNormalize,
+        Token::Ident(_, Keyword::JSON_OBJECT) => Function::JsonObject,
+        Token::Ident(_, Keyword::JSON_OBJECTAGG) => Function::JsonObjectAgg,
+        Token::Ident(_, Keyword::JSON_QUERY) => Function::JsonQuery,
+        Token::Ident(_, Keyword::JSON_QUOTE) => Function::JsonQoute,
+        Token::Ident(_, Keyword::JSON_REMOVE) => Function::JsonRemove,
+        Token::Ident(_, Keyword::JSON_REPLACE) => Function::JsonReplace,
+        Token::Ident(_, Keyword::JSON_SEARCH) => Function::JsonSearch,
+        Token::Ident(_, Keyword::JSON_SET) => Function::JsonSet,
+        Token::Ident(_, Keyword::JSON_TABLE) => Function::JsonTable,
+        Token::Ident(_, Keyword::JSON_TYPE) => Function::JsonType,
+        Token::Ident(_, Keyword::JSON_UNQUOTE) => Function::JsonUnquote,
+        Token::Ident(_, Keyword::JSON_VALID) => Function::JsonValid,
+        Token::Ident(_, Keyword::JSON_VALUE) => Function::JsonValue,
+
+        _ => {
+            parser.issues.push(crate::Issue {
+                level: Level::Error,
+                message: "Unknown function".to_string(),
+                span: span.clone(),
+                fragments: Vec::new(),
+            });
+            Function::Unknown
         }
-    } else {
-        parser.consume_token(Token::LParen)?;
     };
+
     let mut args = Vec::new();
     if !matches!(parser.token, Token::RParen) {
         loop {
@@ -274,12 +494,11 @@ pub(crate) fn parse_function<'a>(
         }
     }
     parser.consume_token(Token::RParen)?;
-
     Ok(Expression::Function(func, args, span))
 }
 
-const interval_priority: usize = 10;
-const in_priority: usize = 110;
+const INTERVAL_PRIORITY: usize = 10;
+const IN_PRIORITY: usize = 110;
 
 trait Priority {
     fn priority(&self) -> usize;
@@ -455,7 +674,7 @@ pub(crate) fn parse_expression<'a>(
                 r.shift_binop(parser.consume(), BinaryOperator::Subtract)
             }
             Token::Ident(_, Keyword::IN) if !inner => {
-                if let Err(e) = r.reduce(in_priority) {
+                if let Err(e) = r.reduce(IN_PRIORITY) {
                     parser.error(e)?;
                 }
                 let lhs = match r.stack.pop() {
@@ -487,7 +706,7 @@ pub(crate) fn parse_expression<'a>(
                 })
             }
             Token::Ident(_, Keyword::IS) if !inner => {
-                if let Err(e) = r.reduce(in_priority) {
+                if let Err(e) = r.reduce(IN_PRIORITY) {
                     parser.error(e)?;
                 }
                 let lhs = match r.stack.pop() {
@@ -532,7 +751,7 @@ pub(crate) fn parse_expression<'a>(
             Token::Ident(_, Keyword::NOT)
                 if !inner && matches!(r.stack.last(), Some(ReduceMember::Expression(_))) =>
             {
-                if let Err(e) = r.reduce(in_priority) {
+                if let Err(e) = r.reduce(IN_PRIORITY) {
                     parser.error(e)?;
                 }
                 let lhs = match r.stack.pop() {
@@ -575,11 +794,15 @@ pub(crate) fn parse_expression<'a>(
             Token::Ident(_, Keyword::LIKE) if !inner => {
                 r.shift_binop(parser.consume(), BinaryOperator::Like)
             }
-            Token::Mul if !inner => {
-                r.shift_expr(Expression::Identifier(vec![IdentifierPart::Star(
-                    parser.consume_token(Token::Mul)?,
-                )]))
+            Token::Plus if !inner => r.shift_binop(parser.consume(), BinaryOperator::Add),
+            Token::Minus if !inner => r.shift_binop(parser.consume(), BinaryOperator::Subtract),
+            Token::Ident(_, Keyword::LIKE) if !inner => {
+                r.shift_binop(parser.consume(), BinaryOperator::Like)
             }
+            Token::Mul if !matches!(r.stack.last(), Some(ReduceMember::Expression(_))) => r
+                .shift_expr(Expression::Identifier(vec![IdentifierPart::Star(
+                    parser.consume_token(Token::Mul)?,
+                )])),
             Token::Mul if !inner && matches!(r.stack.last(), Some(ReduceMember::Expression(_))) => {
                 r.shift_binop(parser.consume(), BinaryOperator::Mult)
             }
@@ -601,443 +824,40 @@ pub(crate) fn parse_expression<'a>(
             Token::Integer(_) => r.shift_expr(Expression::Integer(parser.consume_int()?)),
             Token::Float(_) => r.shift_expr(Expression::Float(parser.consume_float()?)),
 
-            // https://mariadb.com/kb/en/string-functions/
-            Token::Ident(_, Keyword::ASCII) => {
-                r.shift_expr(parse_function(parser, Function::Ascii, false)?)
-            }
-            Token::Ident(_, Keyword::BIN) => {
-                r.shift_expr(parse_function(parser, Function::Bin, false)?)
-            }
-            Token::Ident(_, Keyword::BIT_LENGTH) => {
-                r.shift_expr(parse_function(parser, Function::BitLength, false)?)
-            }
-            Token::Ident(_, Keyword::CHAR_LENGTH) => {
-                r.shift_expr(parse_function(parser, Function::CharacterLength, false)?)
-            }
-            Token::Ident(_, Keyword::CHARACTER_LENGTH) => {
-                r.shift_expr(parse_function(parser, Function::CharacterLength, false)?)
-            }
-            Token::Ident(_, Keyword::CHR) => {
-                r.shift_expr(parse_function(parser, Function::Chr, false)?)
-            }
-            Token::Ident(_, Keyword::CONCAT) => {
-                r.shift_expr(parse_function(parser, Function::Concat, false)?)
-            }
-            Token::Ident(_, Keyword::CONCAT_WS) => {
-                r.shift_expr(parse_function(parser, Function::ConcatWs, false)?)
-            }
-            Token::Ident(_, Keyword::ELT) => {
-                r.shift_expr(parse_function(parser, Function::Elt, false)?)
-            }
-            Token::Ident(_, Keyword::EXPORT_SET) => {
-                r.shift_expr(parse_function(parser, Function::ExportSet, false)?)
-            }
-            Token::Ident(_, Keyword::EXTRACTVALUE) => {
-                r.shift_expr(parse_function(parser, Function::ExtractValue, false)?)
-            }
-            Token::Ident(_, Keyword::FIELD) => {
-                r.shift_expr(parse_function(parser, Function::Field, false)?)
-            }
-            Token::Ident(_, Keyword::FIND_IN_SET) => {
-                r.shift_expr(parse_function(parser, Function::FindInSet, false)?)
-            }
-            Token::Ident(_, Keyword::FORMAT) => {
-                r.shift_expr(parse_function(parser, Function::Format, false)?)
-            }
-            Token::Ident(_, Keyword::FROM_BASE64) => {
-                r.shift_expr(parse_function(parser, Function::FromBase64, false)?)
-            }
-            Token::Ident(_, Keyword::HEX) => {
-                r.shift_expr(parse_function(parser, Function::Hex, false)?)
-            }
-            Token::Ident(_, Keyword::INSERT) => {
-                r.shift_expr(parse_function(parser, Function::Insert, false)?)
-            }
-            Token::Ident(_, Keyword::INSTR) => {
-                r.shift_expr(parse_function(parser, Function::InStr, false)?)
-            }
-            Token::Ident(_, Keyword::LCASE) => {
-                r.shift_expr(parse_function(parser, Function::LCase, false)?)
-            }
-            Token::Ident(_, Keyword::LEFT) => {
-                r.shift_expr(parse_function(parser, Function::Left, false)?)
-            }
-            Token::Ident(_, Keyword::LENGTH) => {
-                r.shift_expr(parse_function(parser, Function::Length, false)?)
-            }
-            Token::Ident(_, Keyword::LENGTHB) => {
-                r.shift_expr(parse_function(parser, Function::LengthB, false)?)
-            }
-            Token::Ident(_, Keyword::LOAD_FILE) => {
-                r.shift_expr(parse_function(parser, Function::LoadFile, false)?)
-            }
-            Token::Ident(_, Keyword::LOCATE) => {
-                r.shift_expr(parse_function(parser, Function::Locate, false)?)
-            }
-            Token::Ident(_, Keyword::LOWER) => {
-                r.shift_expr(parse_function(parser, Function::Lower, false)?)
-            }
-            Token::Ident(_, Keyword::LPAD) => {
-                r.shift_expr(parse_function(parser, Function::LPad, false)?)
-            }
-            Token::Ident(_, Keyword::LTRIM) => {
-                r.shift_expr(parse_function(parser, Function::LTrim, false)?)
-            }
-            Token::Ident(_, Keyword::MAKE_SET) => {
-                r.shift_expr(parse_function(parser, Function::MakeSet, false)?)
-            }
-            Token::Ident(_, Keyword::MID) => {
-                r.shift_expr(parse_function(parser, Function::Mid, false)?)
-            }
-            Token::Ident(_, Keyword::NATURAL_SORT_KEY) => {
-                r.shift_expr(parse_function(parser, Function::NaturalSortkey, false)?)
-            }
-            Token::Ident(_, Keyword::OCTET_LENGTH) => {
-                r.shift_expr(parse_function(parser, Function::OctetLength, false)?)
-            }
-            Token::Ident(_, Keyword::ORD) => {
-                r.shift_expr(parse_function(parser, Function::Ord, false)?)
-            }
-            Token::Ident(_, Keyword::POSITION) => {
-                r.shift_expr(parse_function(parser, Function::Position, false)?)
-            }
-            Token::Ident(_, Keyword::QUOTE) => {
-                r.shift_expr(parse_function(parser, Function::Quote, false)?)
-            }
-            Token::Ident(_, Keyword::REPEAT) => {
-                r.shift_expr(parse_function(parser, Function::Repeat, false)?)
-            }
-            Token::Ident(_, Keyword::REPLACE) => {
-                r.shift_expr(parse_function(parser, Function::Replace, false)?)
-            }
-            Token::Ident(_, Keyword::REVERSE) => {
-                r.shift_expr(parse_function(parser, Function::Reverse, false)?)
-            }
-            Token::Ident(_, Keyword::RIGHT) => {
-                r.shift_expr(parse_function(parser, Function::Right, false)?)
-            }
-            Token::Ident(_, Keyword::RPAD) => {
-                r.shift_expr(parse_function(parser, Function::RPad, false)?)
-            }
-            Token::Ident(_, Keyword::RTRIM) => {
-                r.shift_expr(parse_function(parser, Function::RTrim, false)?)
-            }
-            Token::Ident(_, Keyword::SOUNDEX) => {
-                r.shift_expr(parse_function(parser, Function::SoundEx, false)?)
-            }
-            Token::Ident(_, Keyword::SPACE) => {
-                r.shift_expr(parse_function(parser, Function::Space, false)?)
-            }
-            Token::Ident(_, Keyword::STRCMP) => {
-                r.shift_expr(parse_function(parser, Function::StrCmp, false)?)
-            }
-            Token::Ident(_, Keyword::SUBSTR) => {
-                r.shift_expr(parse_function(parser, Function::SubStr, false)?)
-            }
-            Token::Ident(_, Keyword::SUBSTRING) => {
-                r.shift_expr(parse_function(parser, Function::SubStr, false)?)
-            }
-            Token::Ident(_, Keyword::SUBSTRING_INDEX) => {
-                r.shift_expr(parse_function(parser, Function::SubStringIndex, false)?)
-            }
-            Token::Ident(_, Keyword::TO_BASE64) => {
-                r.shift_expr(parse_function(parser, Function::ToBase64, false)?)
-            }
-            Token::Ident(_, Keyword::TO_CHAR) => {
-                r.shift_expr(parse_function(parser, Function::ToChar, false)?)
-            }
-            Token::Ident(_, Keyword::UCASE) => {
-                r.shift_expr(parse_function(parser, Function::UCase, false)?)
-            }
-            Token::Ident(_, Keyword::UNCOMPRESSED_LENGTH) => {
-                r.shift_expr(parse_function(parser, Function::UncompressedLength, false)?)
-            }
-            Token::Ident(_, Keyword::UNHEX) => {
-                r.shift_expr(parse_function(parser, Function::UnHex, false)?)
-            }
-            Token::Ident(_, Keyword::UPDATEXML) => {
-                r.shift_expr(parse_function(parser, Function::UpdateXml, false)?)
-            }
-            Token::Ident(_, Keyword::UPPER) => {
-                r.shift_expr(parse_function(parser, Function::Upper, false)?)
-            }
-            Token::Ident(_, Keyword::SFORMAT) => {
-                r.shift_expr(parse_function(parser, Function::SFormat, false)?)
-            }
-
-            // TODO uncat
-            Token::Ident(_, Keyword::COUNT) => {
-                r.shift_expr(parse_function(parser, Function::Count, false)?)
-            }
-            Token::Ident(_, Keyword::JSON_EXTRACT) => {
-                r.shift_expr(parse_function(parser, Function::JsonExtract, false)?)
-            }
-            Token::Ident(_, Keyword::IFNULL) => {
-                r.shift_expr(parse_function(parser, Function::IfNull, false)?)
-            }
-            Token::Ident(_, Keyword::EXISTS) => {
-                r.shift_expr(parse_function(parser, Function::Exists, false)?)
-            }
-
-            //https://mariadb.com/kb/en/numeric-functions/
-            Token::Ident(_, Keyword::ABS) => {
-                r.shift_expr(parse_function(parser, Function::Abs, false)?)
-            }
-            Token::Ident(_, Keyword::ACOS) => {
-                r.shift_expr(parse_function(parser, Function::Acos, false)?)
-            }
-            Token::Ident(_, Keyword::ASIN) => {
-                r.shift_expr(parse_function(parser, Function::Asin, false)?)
-            }
-            Token::Ident(_, Keyword::ATAN) => {
-                r.shift_expr(parse_function(parser, Function::Atan, false)?)
-            }
-            Token::Ident(_, Keyword::ATAN2) => {
-                r.shift_expr(parse_function(parser, Function::Atan2, false)?)
-            }
-            Token::Ident(_, Keyword::CEIL | Keyword::CEILING) => {
-                r.shift_expr(parse_function(parser, Function::Ceil, false)?)
-            }
-            Token::Ident(_, Keyword::CONV) => {
-                r.shift_expr(parse_function(parser, Function::Conv, false)?)
-            }
-            Token::Ident(_, Keyword::COS) => {
-                r.shift_expr(parse_function(parser, Function::Cos, false)?)
-            }
-            Token::Ident(_, Keyword::COT) => {
-                r.shift_expr(parse_function(parser, Function::Cot, false)?)
-            }
-            Token::Ident(_, Keyword::CRC32) => {
-                r.shift_expr(parse_function(parser, Function::Crc32, false)?)
-            }
-            Token::Ident(_, Keyword::DEGREES) => {
-                r.shift_expr(parse_function(parser, Function::Degrees, false)?)
-            }
-            Token::Ident(_, Keyword::EXP) => {
-                r.shift_expr(parse_function(parser, Function::Exp, false)?)
-            }
-            Token::Ident(_, Keyword::FLOOR) => {
-                r.shift_expr(parse_function(parser, Function::Floor, false)?)
-            }
-            Token::Ident(_, Keyword::GREATEST) => {
-                r.shift_expr(parse_function(parser, Function::Greatest, false)?)
-            }
-            Token::Ident(_, Keyword::LN) => {
-                r.shift_expr(parse_function(parser, Function::Ln, false)?)
-            }
-            Token::Ident(_, Keyword::LOG) => {
-                r.shift_expr(parse_function(parser, Function::Log, false)?)
-            }
-            Token::Ident(_, Keyword::LOG10) => {
-                r.shift_expr(parse_function(parser, Function::Log10, false)?)
-            }
-            Token::Ident(_, Keyword::LOG2) => {
-                r.shift_expr(parse_function(parser, Function::Log2, false)?)
-            }
-            Token::Ident(_, Keyword::OCT) => {
-                r.shift_expr(parse_function(parser, Function::Oct, false)?)
-            }
-            Token::Ident(_, Keyword::PI) => {
-                r.shift_expr(parse_function(parser, Function::Pi, false)?)
-            }
-            Token::Ident(_, Keyword::POW | Keyword::POWER) => {
-                r.shift_expr(parse_function(parser, Function::Pow, false)?)
-            }
-            Token::Ident(_, Keyword::RADIANS) => {
-                r.shift_expr(parse_function(parser, Function::Radians, false)?)
-            }
-            Token::Ident(_, Keyword::RAND) => {
-                r.shift_expr(parse_function(parser, Function::Rand, false)?)
-            }
-            Token::Ident(_, Keyword::ROUND) => {
-                r.shift_expr(parse_function(parser, Function::Round, false)?)
-            }
-            Token::Ident(_, Keyword::SIGN) => {
-                r.shift_expr(parse_function(parser, Function::Sign, false)?)
-            }
-            Token::Ident(_, Keyword::SIN) => {
-                r.shift_expr(parse_function(parser, Function::Sin, false)?)
-            }
-            Token::Ident(_, Keyword::SQRT) => {
-                r.shift_expr(parse_function(parser, Function::Sqrt, false)?)
-            }
-            Token::Ident(_, Keyword::TAN) => {
-                r.shift_expr(parse_function(parser, Function::Tan, false)?)
-            }
-            Token::Ident(_, Keyword::TRUNCATE) => {
-                r.shift_expr(parse_function(parser, Function::Truncate, false)?)
-            }
-            Token::Ident(_, Keyword::CRC32C) => {
-                r.shift_expr(parse_function(parser, Function::Crc32c, false)?)
-            }
-
-            // https://mariadb.com/kb/en/date-time-functions/
-            Token::Ident(_, Keyword::ADDDATE) => {
-                r.shift_expr(parse_function(parser, Function::AddDate, false)?)
-            }
-            Token::Ident(_, Keyword::ADDTIME) => {
-                r.shift_expr(parse_function(parser, Function::AddTime, false)?)
-            }
-            Token::Ident(_, Keyword::CONVERT_TS) => {
-                r.shift_expr(parse_function(parser, Function::ConvertTs, false)?)
-            }
-            Token::Ident(_, Keyword::CURDATE) => {
-                r.shift_expr(parse_function(parser, Function::CurDate, false)?)
-            }
-            Token::Ident(_, Keyword::CURRENT_DATE) => {
-                r.shift_expr(parse_function(parser, Function::CurDate, true)?)
-            }
-            Token::Ident(_, Keyword::CURRENT_TIME) => {
-                r.shift_expr(parse_function(parser, Function::CurTime, true)?)
-            }
-            Token::Ident(_, Keyword::CURTIME) => {
-                r.shift_expr(parse_function(parser, Function::CurTime, false)?)
-            }
-            Token::Ident(_, Keyword::DATE) => {
-                r.shift_expr(parse_function(parser, Function::Date, false)?)
-            }
-            Token::Ident(_, Keyword::DATEDIFF) => {
-                r.shift_expr(parse_function(parser, Function::DateDiff, false)?)
-            }
-            Token::Ident(_, Keyword::DATE_ADD) => {
-                r.shift_expr(parse_function(parser, Function::DateAdd, false)?)
-            }
-            Token::Ident(_, Keyword::DATE_FORMAT) => {
-                r.shift_expr(parse_function(parser, Function::DateFormat, false)?)
-            }
-            Token::Ident(_, Keyword::DATE_SUB) => {
-                r.shift_expr(parse_function(parser, Function::DateSub, false)?)
-            }
-            Token::Ident(_, Keyword::DAY | Keyword::DAYOFMONTH) => {
-                r.shift_expr(parse_function(parser, Function::DayOfMonth, false)?)
-            }
-            Token::Ident(_, Keyword::DAYNAME) => {
-                r.shift_expr(parse_function(parser, Function::DayName, false)?)
-            }
-            Token::Ident(_, Keyword::DAYOFWEEK) => {
-                r.shift_expr(parse_function(parser, Function::DayOfWeek, false)?)
-            }
-            Token::Ident(_, Keyword::DAYOFYEAR) => {
-                r.shift_expr(parse_function(parser, Function::DayOfYear, false)?)
-            }
-            Token::Ident(_, Keyword::FROM_DAYS) => {
-                r.shift_expr(parse_function(parser, Function::FromDays, false)?)
-            }
-            Token::Ident(
-                _,
-                Keyword::LOCALTIME | Keyword::LOCALTIMESTAMP | Keyword::CURRENT_TIMESTAMP,
-            ) => r.shift_expr(parse_function(parser, Function::Now, true)?),
-            Token::Ident(_, Keyword::MAKEDATE) => {
-                r.shift_expr(parse_function(parser, Function::MakeDate, false)?)
-            }
-            Token::Ident(_, Keyword::MAKETIME) => {
-                r.shift_expr(parse_function(parser, Function::MakeTime, false)?)
-            }
-            Token::Ident(_, Keyword::MICROSECOND) => {
-                r.shift_expr(parse_function(parser, Function::MicroSecond, false)?)
-            }
-            Token::Ident(_, Keyword::MINUTE) => {
-                r.shift_expr(parse_function(parser, Function::Minute, false)?)
-            }
-            Token::Ident(_, Keyword::MONTHNAME) => {
-                r.shift_expr(parse_function(parser, Function::MonthName, false)?)
-            }
-            Token::Ident(_, Keyword::NOW) => {
-                r.shift_expr(parse_function(parser, Function::Now, false)?)
-            }
-            Token::Ident(_, Keyword::PERIOD_ADD) => {
-                r.shift_expr(parse_function(parser, Function::PeriodAdd, false)?)
-            }
-            Token::Ident(_, Keyword::PERIOD_DIFF) => {
-                r.shift_expr(parse_function(parser, Function::PeriodDiff, false)?)
-            }
-            Token::Ident(_, Keyword::QUARTER) => {
-                r.shift_expr(parse_function(parser, Function::Quarter, false)?)
-            }
-            Token::Ident(_, Keyword::SECOND) => {
-                r.shift_expr(parse_function(parser, Function::Second, false)?)
-            }
-            Token::Ident(_, Keyword::SEC_TO_TIME) => {
-                r.shift_expr(parse_function(parser, Function::SecToTime, false)?)
-            }
-            Token::Ident(_, Keyword::STR_TO_DATE) => {
-                r.shift_expr(parse_function(parser, Function::StrToDate, false)?)
-            }
-            Token::Ident(_, Keyword::SUBDATE) => {
-                r.shift_expr(parse_function(parser, Function::SubDate, false)?)
-            }
-            Token::Ident(_, Keyword::SUBTIME) => {
-                r.shift_expr(parse_function(parser, Function::SubTime, false)?)
-            }
-            Token::Ident(_, Keyword::TIME) => {
-                r.shift_expr(parse_function(parser, Function::Time, true)?)
-            }
-            Token::Ident(_, Keyword::TIMEDIFF) => {
-                r.shift_expr(parse_function(parser, Function::TimeDiff, false)?)
-            }
-            Token::Ident(_, Keyword::TIMESTAMP) => {
-                r.shift_expr(parse_function(parser, Function::Timestamp, true)?)
-            }
-            Token::Ident(_, Keyword::TIMESTAMPADD) => {
-                r.shift_expr(parse_function(parser, Function::TimestampAdd, false)?)
-            }
-            Token::Ident(_, Keyword::TIMESTAMPDIFF) => {
-                r.shift_expr(parse_function(parser, Function::TimestampDiff, false)?)
-            }
-            Token::Ident(_, Keyword::TIME_FORMAT) => {
-                r.shift_expr(parse_function(parser, Function::TimeFormat, false)?)
-            }
-            Token::Ident(_, Keyword::TIME_TO_SEC) => {
-                r.shift_expr(parse_function(parser, Function::TimeToSec, false)?)
-            }
-            Token::Ident(_, Keyword::TO_DAYS) => {
-                r.shift_expr(parse_function(parser, Function::ToDays, false)?)
-            }
-            Token::Ident(_, Keyword::TO_SECONDS) => {
-                r.shift_expr(parse_function(parser, Function::ToSeconds, false)?)
-            }
-            Token::Ident(_, Keyword::UNIX_TIMESTAMP) => {
-                r.shift_expr(parse_function(parser, Function::UnixTimestamp, false)?)
-            }
-            Token::Ident(_, Keyword::UTC_DATE) => {
-                r.shift_expr(parse_function(parser, Function::UtcDate, false)?)
-            }
-            Token::Ident(_, Keyword::UTC_TIME) => {
-                r.shift_expr(parse_function(parser, Function::UtcTime, false)?)
-            }
-            Token::Ident(_, Keyword::UTC_TIMESTAMP) => {
-                r.shift_expr(parse_function(parser, Function::UtcTimeStamp, false)?)
-            }
-            Token::Ident(_, Keyword::WEEK) => {
-                r.shift_expr(parse_function(parser, Function::Week, false)?)
-            }
-            Token::Ident(_, Keyword::WEEKDAY) => {
-                r.shift_expr(parse_function(parser, Function::Weekday, false)?)
-            }
-            Token::Ident(_, Keyword::WEEKOFYEAR) => {
-                r.shift_expr(parse_function(parser, Function::WeekOfYear, false)?)
-            }
-            Token::Ident(_, Keyword::ADD_MONTHS) => {
-                r.shift_expr(parse_function(parser, Function::AddMonths, false)?)
-            }
-
-            Token::Ident(_, k) if !k.reserved() => {
-                let mut parts = vec![IdentifierPart::Name(parser.consume_plain_identifier()?)];
-                loop {
-                    if parser.skip_token(Token::Period).is_none() {
-                        break;
-                    }
-                    match &parser.token {
-                        Token::Mul => {
-                            parts.push(IdentifierPart::Star(parser.consume_token(Token::Mul)?))
+            Token::Ident(_, k) if k.expr_ident() => {
+                let i = parser.token.clone();
+                let s = parser.span.clone();
+                parser.consume();
+                if matches!(parser.token, Token::LParen) {
+                    r.shift_expr(parse_function(parser, i, s)?)
+                } else {
+                    let f = match i {
+                        Token::Ident(_, Keyword::CURRENT_TIMESTAMP) => {
+                            Some(Function::CurrentTimestamp)
                         }
-                        Token::Ident(_, _) => {
-                            parts.push(IdentifierPart::Name(parser.consume_plain_identifier()?))
+                        _ => None,
+                    };
+                    if let Some(f) = f {
+                        r.shift_expr(Expression::Function(f, Vec::new(), s))
+                    } else {
+                        let mut parts = vec![IdentifierPart::Name(
+                            parser.token_to_plain_identifier(&i, s)?,
+                        )];
+                        loop {
+                            if parser.skip_token(Token::Period).is_none() {
+                                break;
+                            }
+                            match &parser.token {
+                                Token::Mul => parts
+                                    .push(IdentifierPart::Star(parser.consume_token(Token::Mul)?)),
+                                Token::Ident(_, _) => parts
+                                    .push(IdentifierPart::Name(parser.consume_plain_identifier()?)),
+                                _ => parser.expected_failure("Identifier or '*'")?,
+                            }
                         }
-                        _ => parser.expected_failure("Identifier or '*'")?,
+                        r.shift_expr(Expression::Identifier(parts))
                     }
                 }
-                r.shift_expr(Expression::Identifier(parts))
             }
             Token::QuestionMark => {
                 let arg = parser.arg;
@@ -1050,6 +870,13 @@ pub(crate) fn parse_expression<'a>(
             Token::LParen => {
                 parser.consume_token(Token::LParen)?;
                 let ans = parse_expression_outer(parser)?;
+                parser.consume_token(Token::RParen)?;
+                r.shift_expr(ans)
+            }
+            Token::Ident(_, Keyword::EXISTS) => {
+                parser.consume_keyword(Keyword::EXISTS)?;
+                parser.consume_token(Token::LParen)?;
+                let ans = Expression::Exists(Box::new(parse_select(parser)?));
                 parser.consume_token(Token::RParen)?;
                 r.shift_expr(ans)
             }

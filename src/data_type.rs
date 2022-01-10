@@ -10,18 +10,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    borrow::Cow,
-    fmt::{Display, Write},
-    ops::Deref,
-};
+use std::borrow::Cow;
 
 use crate::{
     expression::{parse_expression, Expression},
     keywords::Keyword,
     lexer::Token,
-    parser::{ParseError, Parser, SingleQuotedString},
-    Span, Spanned,
+    parser::{ParseError, Parser},
+    Span,
 };
 
 /// A property on a datatype
@@ -275,7 +271,6 @@ pub(crate) fn parse_data_type<'a>(parser: &mut Parser<'a>) -> Result<DataType<'a
                     parser, true,
                 )?)));
             }
-            //TODO default
             _ => break,
         }
     }

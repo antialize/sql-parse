@@ -15,7 +15,6 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    select::{parse_select, Select},
     Span,
 };
 
