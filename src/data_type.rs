@@ -17,7 +17,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Span,
+    Span, Spanned,
 };
 
 /// A property on a datatype
@@ -32,6 +32,13 @@ pub enum DataTypeProperty<'a> {
     Comment((Cow<'a, str>, Span)),
     Charset((&'a str, Span)),
     Collate((&'a str, Span)),
+    Virtual(Span),
+    Persistent(Span),
+    Stored(Span),
+    Unique(Span),
+    UniqueKey(Span),
+    GeneratedAlways(Span),
+    As((Span, Box<Expression<'a>>)),
 }
 
 // impl<'a> Spanned for DataTypeProperty<'a> {
@@ -270,6 +277,39 @@ pub(crate) fn parse_data_type<'a>(parser: &mut Parser<'a>) -> Result<DataType<'a
                 properties.push(DataTypeProperty::Default(Box::new(parse_expression(
                     parser, true,
                 )?)));
+            }
+            Token::Ident(_, Keyword::VIRTUAL) => properties.push(DataTypeProperty::Virtual(
+                parser.consume_keyword(Keyword::VIRTUAL)?,
+            )),
+            Token::Ident(_, Keyword::PERSISTENT) => properties.push(DataTypeProperty::Persistent(
+                parser.consume_keyword(Keyword::PERSISTENT)?,
+            )),
+            Token::Ident(_, Keyword::STORED) => properties.push(DataTypeProperty::Stored(
+                parser.consume_keyword(Keyword::STORED)?,
+            )),
+            Token::Ident(_, Keyword::UNIQUE) => {
+                let span = parser.consume_keyword(Keyword::UNIQUE)?;
+                if let Some(s2) = parser.skip_keyword(Keyword::KEY) {
+                    properties.push(DataTypeProperty::UniqueKey(s2.join_span(&span)));
+                } else {
+                    properties.push(DataTypeProperty::Unique(span));
+                }
+            }
+            Token::Ident(_, Keyword::GENERATED) => {
+                properties.push(DataTypeProperty::GeneratedAlways(
+                    parser
+                        .consume_keyword(Keyword::GENERATED)?
+                        .join_span(&parser.consume_keyword(Keyword::ALWAYS)?),
+                ))
+            }
+            Token::Ident(_, Keyword::AS) => {
+                let span = parser.consume_keyword(Keyword::AS)?;
+                parser.consume_token(Token::LParen)?;
+                let e = parser.recovered(")", &|t| t == &Token::RParen, |parser| {
+                    parse_expression(parser, false)
+                })?;
+                parser.consume_token(Token::RParen)?;
+                properties.push(DataTypeProperty::As((span, Box::new(e))));
             }
             _ => break,
         }

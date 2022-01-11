@@ -30,6 +30,7 @@ pub(crate) struct Parser<'a> {
     pub(crate) lexer: Lexer<'a>,
     pub(crate) issues: Vec<Issue>,
     pub(crate) arg: usize,
+    pub(crate) delimiter: Token<'a>,
 }
 
 pub(crate) fn decode_single_quoted_string(s: &str) -> Cow<'_, str> {
@@ -97,6 +98,7 @@ impl<'a> Parser<'a> {
             lexer,
             issues: Vec::new(),
             arg: 0,
+            delimiter: Token::SemiColon,
         }
     }
 
@@ -110,7 +112,7 @@ impl<'a> Parser<'a> {
             match &self.token {
                 t if brackets.is_empty() && success(t) => return Ok(()),
                 Token::Eof => return Err(ParseError::Unrecovered),
-                Token::SemiColon => return Err(ParseError::Unrecovered),
+                t if t == &self.delimiter => return Err(ParseError::Unrecovered),
                 t if brackets.is_empty() && fail(t) => return Err(ParseError::Unrecovered),
                 Token::LParen => {
                     brackets.push(Token::LParen);

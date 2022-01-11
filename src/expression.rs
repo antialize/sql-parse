@@ -189,6 +189,9 @@ pub enum Function {
     Week,
     Weekday,
     WeekOfYear,
+    If,
+    NullIf,
+    NVL2,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -246,6 +249,14 @@ pub enum IdentifierPart<'a> {
 }
 
 #[derive(Debug, Clone)]
+pub struct When<'a> {
+    when_span: Span,
+    when: Expression<'a>,
+    then_span: Span,
+    then: Expression<'a>,
+}
+
+#[derive(Debug, Clone)]
 pub enum Expression<'a> {
     Binary {
         op: BinaryOperator,
@@ -275,6 +286,19 @@ pub enum Expression<'a> {
         not_in: bool,
     },
     Is(Box<Expression<'a>>, Is, Span),
+    Invalid,
+    Case {
+        case_span: Span,
+        whens: Vec<When<'a>>,
+        else_: Option<(Span, Box<Expression<'a>>)>,
+        end_span: Span,
+    },
+}
+
+impl<'a> Default for Expression<'a> {
+    fn default() -> Self {
+        Self::Invalid
+    }
 }
 
 fn parse_function<'a>(
@@ -342,8 +366,14 @@ fn parse_function<'a>(
 
         // TODO uncat
         Token::Ident(_, Keyword::COUNT) => Function::Count,
-        Token::Ident(_, Keyword::IFNULL) => Function::IfNull,
         Token::Ident(_, Keyword::EXISTS) => Function::Exists,
+
+        //https://mariadb.com/kb/en/control-flow-functions/
+        Token::Ident(_, Keyword::IFNULL) => Function::IfNull,
+        Token::Ident(_, Keyword::NULLIF) => Function::NullIf,
+        Token::Ident(_, Keyword::NVL) => Function::IfNull,
+        Token::Ident(_, Keyword::NVL2) => Function::NVL2,
+        Token::Ident(_, Keyword::IF) => Function::If,
 
         //https://mariadb.com/kb/en/numeric-functions/
         Token::Ident(_, Keyword::ABS) => Function::Abs,
@@ -616,6 +646,7 @@ impl<'a> Reducer<'a> {
 
     fn shift_expr(&mut self, e: Expression<'a>) -> Result<(), &'static str> {
         if matches!(self.stack.last(), Some(ReduceMember::Expression(_))) {
+            //panic!();
             return Err("Expression should not follow expression");
         }
         self.stack.push(ReduceMember::Expression(e));
@@ -795,6 +826,7 @@ pub(crate) fn parse_expression<'a>(
                 r.shift_binop(parser.consume(), BinaryOperator::Like)
             }
             Token::Plus if !inner => r.shift_binop(parser.consume(), BinaryOperator::Add),
+            Token::Div if !inner => r.shift_binop(parser.consume(), BinaryOperator::Divide),
             Token::Minus if !inner => r.shift_binop(parser.consume(), BinaryOperator::Subtract),
             Token::Ident(_, Keyword::LIKE) if !inner => {
                 r.shift_binop(parser.consume(), BinaryOperator::Like)
@@ -880,6 +912,43 @@ pub(crate) fn parse_expression<'a>(
                 parser.consume_token(Token::RParen)?;
                 r.shift_expr(ans)
             }
+            Token::Ident(_, Keyword::CASE) => {
+                let case_span = parser.consume_keyword(Keyword::CASE)?;
+                let mut whens = Vec::new();
+                let mut else_ = None;
+                parser.recovered(
+                    "'END'",
+                    &|t| matches!(t, Token::Ident(_, Keyword::END)),
+                    |parser| {
+                        loop {
+                            let when_span = parser.consume_keyword(Keyword::WHEN)?;
+                            let when = parse_expression(parser, false)?;
+                            let then_span = parser.consume_keyword(Keyword::THEN)?;
+                            let then = parse_expression(parser, false)?;
+                            whens.push(When {
+                                when_span,
+                                when,
+                                then_span,
+                                then,
+                            });
+                            if !matches!(parser.token, Token::Ident(_, Keyword::WHEN)) {
+                                break;
+                            }
+                        }
+                        if let Some(span) = parser.skip_keyword(Keyword::ELSE) {
+                            else_ = Some((span, Box::new(parse_expression(parser, false)?)))
+                        };
+                        Ok(())
+                    },
+                )?;
+                let end_span = parser.consume_keyword(Keyword::END)?;
+                r.shift_expr(Expression::Case {
+                    case_span,
+                    whens,
+                    else_,
+                    end_span,
+                })
+            }
             _ => break,
         };
         if let Err(e) = e {
@@ -905,5 +974,85 @@ pub(crate) fn parse_expression_outer<'a>(
         Ok(Expression::Subquery(Box::new(parse_select(parser)?)))
     } else {
         parse_expression(parser, false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        expression::{BinaryOperator, Expression},
+        parser::Parser,
+    };
+
+    use super::{parse_expression, IdentifierPart};
+
+    fn test_ident<'a>(e: impl AsRef<Expression<'a>>, v: &str) -> Result<(), String> {
+        let v = match e.as_ref() {
+            Expression::Identifier(a) => {
+                if a.len() != 1 {
+                    false
+                } else {
+                    match a.get(0) {
+                        Some(IdentifierPart::Name((vv, _))) => *vv == v,
+                        _ => false,
+                    }
+                }
+            }
+            _ => false,
+        };
+        if !v {
+            Err(format!("Expected identifier {} found {:?}", v, e.as_ref()))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn test_expr(src: &'static str, f: impl FnOnce(&Expression<'_>) -> Result<(), String>) {
+        let mut parser = Parser::new(src);
+        let res = parse_expression(&mut parser, false).unwrap();
+        if let Err(e) = f(&res) {
+            panic!("Error parsing {}: {}\nGot {:#?}", src, e, res);
+        }
+    }
+
+    #[test]
+    fn expressions() {
+        test_expr("`a` + `b` * `c` + `d`", |e| {
+            match e {
+                Expression::Binary {
+                    op: BinaryOperator::Add,
+                    lhs,
+                    rhs,
+                    ..
+                } => {
+                    match lhs.as_ref() {
+                        Expression::Binary {
+                            op: BinaryOperator::Add,
+                            lhs,
+                            rhs,
+                            ..
+                        } => {
+                            test_ident(lhs, "a")?;
+                            match rhs.as_ref() {
+                                Expression::Binary {
+                                    op: BinaryOperator::Mult,
+                                    lhs,
+                                    rhs,
+                                    ..
+                                } => {
+                                    test_ident(lhs, "b")?;
+                                    test_ident(rhs, "c")?;
+                                }
+                                _ => return Err("Lhs.Rhs".to_string()),
+                            }
+                        }
+                        _ => return Err("Lhs".to_string()),
+                    }
+                    test_ident(rhs, "d")?;
+                }
+                _ => return Err("Outer".to_string()),
+            }
+            Ok(())
+        });
     }
 }

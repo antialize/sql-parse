@@ -26,6 +26,7 @@ pub enum Token<'a> {
     DoubleExclamationMark,
     DoubleAmpersand,
     DoublePipe,
+    DoubleDollar,
     Eq,
     ExclamationMark,
     Float(&'a str),
@@ -107,6 +108,7 @@ impl<'a> Token<'a> {
             Token::Sharp => "'#'",
             Token::ShiftLeft => "'>>'",
             Token::ShiftRight => "'<<'",
+            Token::DoubleDollar => "'$$'",
             Token::SingleQuotedString(_) => "String",
             Token::DoubleQuotedString(_) => "String",
             Token::Spaceship => "'<=>'",
@@ -188,6 +190,13 @@ impl<'a> Lexer<'a> {
                     }
                     _ => Token::Colon,
                 },
+                '$' => match self.chars.peek() {
+                    Some((_, '$')) => {
+                        self.chars.next();
+                        Token::DoubleDollar
+                    }
+                    _ => Token::Invalid,
+                },
                 '=' => match self.chars.peek() {
                     Some((_, '>')) => {
                         self.chars.next();
@@ -254,7 +263,24 @@ impl<'a> Lexer<'a> {
                 },
                 '/' => match self.chars.peek() {
                     Some((_, '*')) => {
-                        todo!("Multiline comment")
+                        self.chars.next();
+                        let ok = loop {
+                            match self.chars.next() {
+                                Some((_, '*')) => {
+                                    if matches!(self.chars.peek(), Some((_, '/'))) {
+                                        self.chars.next();
+                                        break true;
+                                    }
+                                }
+                                Some(_) => (),
+                                None => break false,
+                            }
+                        };
+                        if ok {
+                            continue;
+                        } else {
+                            Token::Invalid
+                        }
                     }
                     Some((_, '/')) => {
                         while !matches!(self.chars.next(), Some((_, '\r' | '\n')) | None) {}
@@ -272,7 +298,7 @@ impl<'a> Lexer<'a> {
                 '`' => {
                     while matches!(
                         self.chars.peek(),
-                        Some((_, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9'))
+                        Some((_, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9' | '-'))
                     ) {
                         self.chars.next();
                     }

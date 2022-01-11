@@ -11,8 +11,11 @@
 // limitations under the License.
 
 use parser::Parser;
+mod alter;
+mod create;
 mod data_type;
 mod delete;
+mod drop;
 mod expression;
 mod insert;
 mod issue;
@@ -28,7 +31,7 @@ pub use data_type::{DataType, DataTypeProperty, Type};
 pub use issue::{Issue, Level};
 pub use lexer::Lexer;
 pub use span::{Span, Spanned};
-pub use statement::{CreateDefinition, CreateTable, Statement, TableOption};
+pub use statement::Statement;
 
 pub fn parse_statements(src: &str) -> (Vec<Statement<'_>>, Vec<Issue>) {
     let mut parser = Parser::new(src);
@@ -58,7 +61,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let src = std::fs::read_to_string("qs.sql").expect("Failed to read file");
+        let src = std::fs::read_to_string("qs2.sql").expect("Failed to read file");
         //let src = "int (22) null signed unsigned signed,";
         let mut parser = Parser::new(&src);
 
@@ -69,7 +72,7 @@ mod tests {
 
         if !parser.issues.is_empty() {
             let mut files = SimpleFiles::new();
-            let file_id = files.add("schema.sql", &src);
+            let file_id = files.add("qs2.sql", &src);
             let writer = StandardStream::stderr(ColorChoice::Always);
             let config = codespan_reporting::term::Config::default();
             for issue in parser.issues {
