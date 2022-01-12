@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -9,13 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use crate::{
-    expression::{parse_expression, Expression},
+    data_type::parse_data_type,
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Span, Spanned, Statement,
+    DataType, Span, Spanned, Statement,
 };
 
 #[derive(Clone, Debug)]
@@ -23,7 +24,7 @@ pub enum IndexOption<'a> {
     IndexTypeBTree(Span),
     IndexTypeHash(Span),
     IndexTypeRTree(Span),
-    Dummy(&'a str),
+    Comment((Cow<'a, str>, Span)),
 }
 
 #[derive(Clone, Debug)]
@@ -36,6 +37,33 @@ pub enum IndexType {
 }
 
 #[derive(Clone, Debug)]
+pub enum ForeginKeyOnType {
+    Update(Span),
+    Delete(Span),
+}
+
+#[derive(Clone, Debug)]
+pub enum ForeginKeyOnAction {
+    Restrict(Span),
+    Cascade(Span),
+    SetNull(Span),
+    NoAction(Span),
+    SetDefault(Span),
+}
+
+#[derive(Clone, Debug)]
+pub struct ForeginKeyOn {
+    pub type_: ForeginKeyOnType,
+    pub action: ForeginKeyOnAction,
+}
+
+#[derive(Clone, Debug)]
+pub struct IndexCol<'a> {
+    pub name: (&'a str, Span),
+    pub size: Option<(u32, Span)>,
+}
+
+#[derive(Clone, Debug)]
 pub enum AlterSpecification<'a> {
     Dummy(&'a str),
     AddIndex {
@@ -44,8 +72,26 @@ pub enum AlterSpecification<'a> {
         if_not_exists: Option<Span>,
         name: Option<(&'a str, Span)>,
         constraint: Option<(Span, Option<(&'a str, Span)>)>,
-        cols: Vec<(&'a str, Span)>,
+        cols: Vec<IndexCol<'a>>,
         index_options: Vec<IndexOption<'a>>,
+    },
+    AddForeginKey {
+        add_span: Span,
+        constraint: Option<(Span, Option<(&'a str, Span)>)>,
+        foregin_key_span: Span,
+        if_not_exists: Option<Span>,
+        name: Option<(&'a str, Span)>,
+        cols: Vec<IndexCol<'a>>,
+        references_span: Span,
+        references_table: (&'a str, Span),
+        references_cols: Vec<(&'a str, Span)>,
+        ons: Vec<ForeginKeyOn>,
+    },
+    Modify {
+        modify_span: Span,
+        if_exists: Option<Span>,
+        col: (&'a str, Span),
+        definition: DataType<'a>,
     },
 }
 
@@ -76,13 +122,46 @@ fn parse_index_options<'a>(
     loop {
         match &parser.token {
             Token::Ident(_, Keyword::USING) => parse_index_type(parser, out)?,
+            Token::Ident(_, Keyword::COMMENT) => {
+                parser.consume_keyword(Keyword::COMMENT)?;
+                out.push(IndexOption::Comment(parser.consume_string()?))
+            }
             _ => break,
         }
     }
     Ok(())
 }
 
-fn parse_index_cols<'a>(parser: &mut Parser<'a>) -> Result<Vec<(&'a str, Span)>, ParseError> {
+fn parse_index_cols<'a>(parser: &mut Parser<'a>) -> Result<Vec<IndexCol<'a>>, ParseError> {
+    parser.consume_token(Token::LParen)?;
+    let mut ans = Vec::new();
+    parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
+        loop {
+            let name = parser.consume_plain_identifier()?;
+            let size = if parser.skip_token(Token::LParen).is_some() {
+                let size = parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
+                    parser.consume_int()
+                })?;
+                parser.consume_token(Token::RParen)?;
+                Some(size)
+            } else {
+                None
+            };
+
+            // TODO [ASC | DESC]
+
+            ans.push(IndexCol { name, size });
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        Ok(())
+    })?;
+    parser.consume_token(Token::RParen)?;
+    Ok(ans)
+}
+
+fn parse_cols<'a>(parser: &mut Parser<'a>) -> Result<Vec<(&'a str, Span)>, ParseError> {
     parser.consume_token(Token::LParen)?;
     let mut ans = Vec::new();
     parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
@@ -112,6 +191,82 @@ fn parse_add_alter_specification<'a>(
         None
     };
     match &parser.token {
+        Token::Ident(_, Keyword::FOREIGN) => {
+            let foregin_key_span = parser
+                .consume_keyword(Keyword::FOREIGN)?
+                .join_span(&parser.consume_keyword(Keyword::KEY)?);
+            let if_not_exists = if let Some(s) = parser.skip_keyword(Keyword::IF) {
+                Some(
+                    parser
+                        .consume_keyword(Keyword::NOT)?
+                        .join_span(&parser.consume_keyword(Keyword::EXISTS)?)
+                        .join_span(&s),
+                )
+            } else {
+                None
+            };
+            let name = match &parser.token {
+                Token::Ident(_, kw) if !kw.reserved() => Some(parser.consume_plain_identifier()?),
+                _ => None,
+            };
+
+            let cols = parse_index_cols(parser)?;
+            let references_span = parser.consume_keyword(Keyword::REFERENCES)?;
+            let references_table = parser.consume_plain_identifier()?;
+            let references_cols = parse_cols(parser)?;
+            let mut ons = Vec::new();
+            while let Some(on) = parser.skip_keyword(Keyword::ON) {
+                let type_ = match parser.token {
+                    Token::Ident(_, Keyword::UPDATE) => ForeginKeyOnType::Update(
+                        parser.consume_keyword(Keyword::UPDATE)?.join_span(&on),
+                    ),
+                    Token::Ident(_, Keyword::DELETE) => ForeginKeyOnType::Delete(
+                        parser.consume_keyword(Keyword::DELETE)?.join_span(&on),
+                    ),
+                    _ => parser.expected_failure("'UPDATE' or 'DELETE'")?,
+                };
+
+                let action = match parser.token {
+                    Token::Ident(_, Keyword::RESTRICT) => {
+                        ForeginKeyOnAction::Restrict(parser.consume_keyword(Keyword::RESTRICT)?)
+                    }
+                    Token::Ident(_, Keyword::CASCADE) => {
+                        ForeginKeyOnAction::Cascade(parser.consume_keyword(Keyword::CASCADE)?)
+                    }
+                    Token::Ident(_, Keyword::SET) => {
+                        let set = parser.consume_keyword(Keyword::SET)?;
+                        match parser.token {
+                            Token::Ident(_, Keyword::NULL) => ForeginKeyOnAction::SetNull(
+                                parser.consume_keyword(Keyword::NULL)?.join_span(&set),
+                            ),
+                            Token::Ident(_, Keyword::DELETE) => ForeginKeyOnAction::SetDefault(
+                                parser.consume_keyword(Keyword::DEFAULT)?.join_span(&set),
+                            ),
+                            _ => parser.expected_failure("'NULL' or 'DEFAULT'")?,
+                        }
+                    }
+                    Token::Ident(_, Keyword::NO) => ForeginKeyOnAction::SetNull(
+                        parser
+                            .consume_keyword(Keyword::NO)?
+                            .join_span(&parser.consume_keyword(Keyword::ACTION)?),
+                    ),
+                    _ => parser.expected_failure("'RESTRICT' or 'CASCADE', 'SET' or 'NO")?,
+                };
+                ons.push(ForeginKeyOn { type_, action })
+            }
+            Ok(AlterSpecification::AddForeginKey {
+                add_span,
+                constraint,
+                foregin_key_span,
+                if_not_exists,
+                name,
+                cols,
+                references_span,
+                references_table,
+                references_cols,
+                ons,
+            })
+        }
         Token::Ident(
             _,
             Keyword::PRIMARY
@@ -230,6 +385,26 @@ fn parse_alter_table<'a>(
         loop {
             alter_specifications.push(match parser.token {
                 Token::Ident(_, Keyword::ADD) => parse_add_alter_specification(parser)?,
+                Token::Ident(_, Keyword::MODIFY) => {
+                    let mut modify_span = parser.consume_keyword(Keyword::MODIFY)?;
+                    if let Some(v) = parser.skip_keyword(Keyword::COLUMN) {
+                        modify_span = modify_span.join_span(&v);
+                    }
+                    let if_exists = if let Some(span) = parser.skip_keyword(Keyword::IF) {
+                        Some(parser.consume_keyword(Keyword::EXISTS)?.join_span(&span))
+                    } else {
+                        None
+                    };
+                    let col = parser.consume_plain_identifier()?;
+                    let definition = parse_data_type(parser)?;
+                    // TODO [FIRST | AFTER col_name]
+                    AlterSpecification::Modify {
+                        modify_span,
+                        if_exists,
+                        col,
+                        definition,
+                    }
+                }
                 _ => parser.expected_failure("alter specification")?,
             });
             if parser.skip_token(Token::Comma).is_none() {

@@ -38,6 +38,7 @@ pub enum DataTypeProperty<'a> {
     Unique(Span),
     UniqueKey(Span),
     GeneratedAlways(Span),
+    AutoIncrement(Span),
     As((Span, Box<Expression<'a>>)),
 }
 
@@ -240,6 +241,9 @@ pub(crate) fn parse_data_type<'a>(parser: &mut Parser<'a>) -> Result<DataType<'a
             Token::Ident(_, Keyword::SIGNED) => properties.push(DataTypeProperty::Signed(
                 parser.consume_keyword(Keyword::SIGNED)?,
             )),
+            Token::Ident(_, Keyword::AUTO_INCREMENT) => properties.push(
+                DataTypeProperty::AutoIncrement(parser.consume_keyword(Keyword::AUTO_INCREMENT)?),
+            ),
             Token::Ident(_, Keyword::UNSIGNED) => properties.push(DataTypeProperty::Unsigned(
                 parser.consume_keyword(Keyword::UNSIGNED)?,
             )),
