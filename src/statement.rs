@@ -10,11 +10,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::ParseBoolError;
-
 use crate::{
     alter::{parse_alter, AlterTable},
-    create::{parse_create, CreateTable},
+    create::{parse_create, CreateFunction, CreateTable, CreateTrigger, CreateView},
     delete::{parse_delete, Delete},
     drop::{
         parse_drop, DropDatabase, DropEvent, DropFunction, DropProcedure, DropServer, DropTable,
@@ -27,7 +25,7 @@ use crate::{
     parser::{ParseError, Parser},
     select::{parse_select, Select},
     update::{parse_update, Update},
-    Level, Span,
+    Level, Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
@@ -51,9 +49,117 @@ fn parse_set<'a>(parser: &mut Parser<'a>) -> Result<Set<'a>, ParseError> {
     Ok(Set { set_span, values })
 }
 
+fn parse_statement_list_inner<'a>(
+    parser: &mut Parser<'a>,
+    out: &mut Vec<Statement<'a>>,
+) -> Result<(), ParseError> {
+    let old_delimiter = std::mem::replace(&mut parser.delimiter, Token::SemiColon);
+    loop {
+        while parser.skip_token(Token::SemiColon).is_some() {}
+        match parse_statement(parser)? {
+            Some(v) => out.push(v),
+            None => break,
+        }
+        if parser.skip_token(Token::SemiColon).is_none() {
+            break;
+        }
+    }
+    Ok(())
+}
+
+fn parse_statement_list<'a>(
+    parser: &mut Parser<'a>,
+    out: &mut Vec<Statement<'a>>,
+) -> Result<(), ParseError> {
+    let old_delimiter = std::mem::replace(&mut parser.delimiter, Token::SemiColon);
+    let r = parse_statement_list_inner(parser, out);
+    parser.delimiter = old_delimiter;
+    r
+}
+
+fn parse_block<'a>(parser: &mut Parser<'a>) -> Result<Vec<Statement<'a>>, ParseError> {
+    parser.consume_keyword(Keyword::BEGIN)?;
+    let mut ans = Vec::new();
+    parser.recovered(
+        "'END'",
+        &|e| matches!(e, Token::Ident(_, Keyword::END)),
+        |parser| parse_statement_list(parser, &mut ans),
+    )?;
+    parser.consume_keyword(Keyword::END)?;
+    Ok(ans)
+}
+
+#[derive(Clone, Debug)]
+pub struct IfCondition<'a> {
+    pub elseif_span: Option<Span>,
+    pub search_condition: Expression<'a>,
+    pub then_span: Span,
+    pub then: Vec<Statement<'a>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct If<'a> {
+    pub if_span: Span,
+    pub conditions: Vec<IfCondition<'a>>,
+    pub else_: Option<(Span, Vec<Statement<'a>>)>,
+    pub endif_span: Span,
+}
+
+fn parse_if<'a>(parser: &mut Parser<'a>) -> Result<If<'a>, ParseError> {
+    let if_span = parser.consume_keyword(Keyword::IF)?;
+    let mut conditions = Vec::new();
+    let mut else_ = None;
+    parser.recovered(
+        "'END'",
+        &|e| matches!(e, Token::Ident(_, Keyword::END)),
+        |parser| {
+            let search_condition = parse_expression(parser, false)?;
+            let then_span = parser.consume_keyword(Keyword::THEN)?;
+            let mut then = Vec::new();
+            parse_statement_list(parser, &mut then)?;
+            conditions.push(IfCondition {
+                elseif_span: None,
+                search_condition,
+                then_span,
+                then,
+            });
+            while let Some(elseif_span) = parser.skip_keyword(Keyword::ELSEIF) {
+                let search_condition = parse_expression(parser, false)?;
+                let then_span = parser.consume_keyword(Keyword::THEN)?;
+                let mut then = Vec::new();
+                parse_statement_list(parser, &mut then)?;
+                conditions.push(IfCondition {
+                    elseif_span: Some(elseif_span),
+                    search_condition,
+                    then_span,
+                    then,
+                })
+            }
+            if let Some(else_span) = parser.skip_keyword(Keyword::ELSE) {
+                let mut o = Vec::new();
+                parse_statement_list(parser, &mut o)?;
+                else_ = Some((else_span, o));
+            }
+            Ok(())
+        },
+    )?;
+    let endif_span = parser
+        .consume_keyword(Keyword::END)?
+        .join_span(&parser.consume_keyword(Keyword::IF)?);
+    Ok(If {
+        if_span,
+        conditions,
+        else_,
+        endif_span,
+    })
+}
+
 #[derive(Clone, Debug)]
 pub enum Statement<'a> {
     CreateTable(CreateTable<'a>),
+    CreateView(CreateView<'a>),
+    CreateTrigger(CreateTrigger<'a>),
+    CreateFunction(CreateFunction<'a>),
     Select(Select<'a>),
     Delete(Delete<'a>),
     Insert(Insert<'a>),
@@ -68,20 +174,26 @@ pub enum Statement<'a> {
     DropView(DropView<'a>),
     Set(Set<'a>),
     AlterTable(AlterTable<'a>),
+    Block(Vec<Statement<'a>>),
+    If(If<'a>),
 }
 
-pub(crate) fn parse_statement<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, ParseError> {
-    match &parser.token {
-        Token::Ident(_, Keyword::CREATE) => parse_create(parser),
-        Token::Ident(_, Keyword::DROP) => parse_drop(parser),
-        Token::Ident(_, Keyword::SELECT) => Ok(Statement::Select(parse_select(parser)?)),
-        Token::Ident(_, Keyword::DELETE) => Ok(Statement::Delete(parse_delete(parser)?)),
-        Token::Ident(_, Keyword::INSERT) => Ok(Statement::Insert(parse_insert(parser)?)),
-        Token::Ident(_, Keyword::UPDATE) => Ok(Statement::Update(parse_update(parser)?)),
-        Token::Ident(_, Keyword::SET) => Ok(Statement::Set(parse_set(parser)?)),
-        Token::Ident(_, Keyword::ALTER) => parse_alter(parser),
-        _ => parser.expected_failure("Statement"),
-    }
+pub(crate) fn parse_statement<'a>(
+    parser: &mut Parser<'a>,
+) -> Result<Option<Statement<'a>>, ParseError> {
+    Ok(match &parser.token {
+        Token::Ident(_, Keyword::CREATE) => Some(parse_create(parser)?),
+        Token::Ident(_, Keyword::DROP) => Some(parse_drop(parser)?),
+        Token::Ident(_, Keyword::SELECT) => Some(Statement::Select(parse_select(parser)?)),
+        Token::Ident(_, Keyword::DELETE) => Some(Statement::Delete(parse_delete(parser)?)),
+        Token::Ident(_, Keyword::INSERT) => Some(Statement::Insert(parse_insert(parser)?)),
+        Token::Ident(_, Keyword::UPDATE) => Some(Statement::Update(parse_update(parser)?)),
+        Token::Ident(_, Keyword::SET) => Some(Statement::Set(parse_set(parser)?)),
+        Token::Ident(_, Keyword::BEGIN) => Some(Statement::Block(parse_block(parser)?)),
+        Token::Ident(_, Keyword::IF) => Some(Statement::If(parse_if(parser)?)),
+        Token::Ident(_, Keyword::ALTER) => Some(parse_alter(parser)?),
+        _ => None,
+    })
 }
 
 pub(crate) fn parse_statements<'a>(parser: &mut Parser<'a>) -> Vec<Statement<'a>> {
@@ -113,7 +225,11 @@ pub(crate) fn parse_statements<'a>(parser: &mut Parser<'a>) -> Vec<Statement<'a>
             continue;
         }
 
-        let stmt = parse_statement(parser);
+        let stmt = match parse_statement(parser) {
+            Ok(Some(v)) => Ok(v),
+            Ok(None) => parser.expected_failure("Statement"),
+            Err(e) => Err(e),
+        };
         let err = stmt.is_err();
         if let Ok(stmt) = stmt {
             ans.push(stmt);

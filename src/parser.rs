@@ -270,6 +270,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub(crate) fn consume_keywords(&mut self, keywords: &[Keyword]) -> Result<Span, ParseError> {
+        let mut span = self.consume_keyword(keywords[0])?;
+        for keyword in &keywords[1..] {
+            span = self.consume_keyword(*keyword)?.join_span(&span);
+        }
+        Ok(span)
+    }
+
     pub(crate) fn skip_keyword(&mut self, keyword: Keyword) -> Option<Span> {
         match &self.token {
             Token::Ident(_, kw) if kw == &keyword => Some(self.consume_keyword(keyword).unwrap()),

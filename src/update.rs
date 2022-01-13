@@ -15,6 +15,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
+    select::{parse_table_reference, TableReference},
     Span,
 };
 
@@ -28,9 +29,9 @@ pub enum UpdateFlag {
 pub struct Update<'a> {
     pub update_span: Span,
     pub flags: Vec<UpdateFlag>,
-    pub tables: Vec<Vec<(&'a str, Span)>>,
+    pub tables: Vec<TableReference<'a>>,
     pub set_span: Span,
-    pub set: Vec<((&'a str, Span), Expression<'a>)>,
+    pub set: Vec<(Vec<(&'a str, Span)>, Expression<'a>)>,
     pub where_: Option<(Expression<'a>, Span)>,
 }
 
@@ -52,14 +53,7 @@ pub(crate) fn parse_update<'a>(parser: &mut Parser<'a>) -> Result<Update<'a>, Pa
 
     let mut tables = Vec::new();
     loop {
-        let mut table = vec![parser.consume_plain_identifier()?];
-        loop {
-            if parser.skip_token(Token::Period).is_none() {
-                break;
-            }
-            table.push(parser.consume_plain_identifier()?);
-        }
-        tables.push(table);
+        tables.push(parse_table_reference(parser)?);
         if parser.skip_token(Token::Comma).is_none() {
             break;
         }
@@ -68,7 +62,10 @@ pub(crate) fn parse_update<'a>(parser: &mut Parser<'a>) -> Result<Update<'a>, Pa
     let set_span = parser.consume_keyword(Keyword::SET)?;
     let mut set = Vec::new();
     loop {
-        let col = parser.consume_plain_identifier()?;
+        let mut col = vec![parser.consume_plain_identifier()?];
+        while parser.skip_token(Token::Period).is_some() {
+            col.push(parser.consume_plain_identifier()?);
+        }
         parser.consume_token(Token::Eq)?;
         let val = parse_expression(parser, false)?;
         set.push((col, val));

@@ -21,7 +21,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub enum Function {
+pub enum Function<'a> {
     Abs,
     Acos,
     AddDate,
@@ -192,6 +192,7 @@ pub enum Function {
     If,
     NullIf,
     NVL2,
+    Other(&'a str),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -275,7 +276,7 @@ pub enum Expression<'a> {
     String((Cow<'a, str>, Span)),
     Integer((u64, Span)),
     Float((f64, Span)),
-    Function(Function, Vec<Expression<'a>>, Span),
+    Function(Function<'a>, Vec<Expression<'a>>, Span),
     Identifier(Vec<IdentifierPart<'a>>),
     Arg((usize, Span)),
     Exists(Box<Select<'a>>),
@@ -303,7 +304,7 @@ impl<'a> Default for Expression<'a> {
 
 fn parse_function<'a>(
     parser: &mut Parser<'a>,
-    t: Token,
+    t: Token<'a>,
     span: Span,
 ) -> Result<Expression<'a>, ParseError> {
     parser.consume_token(Token::LParen)?;
@@ -495,7 +496,7 @@ fn parse_function<'a>(
         Token::Ident(_, Keyword::JSON_UNQUOTE) => Function::JsonUnquote,
         Token::Ident(_, Keyword::JSON_VALID) => Function::JsonValid,
         Token::Ident(_, Keyword::JSON_VALUE) => Function::JsonValue,
-
+        Token::Ident(v, k) if !k.reserved() => Function::Other(v),
         _ => {
             parser.issues.push(crate::Issue {
                 level: Level::Error,

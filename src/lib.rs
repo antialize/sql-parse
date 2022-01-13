@@ -39,11 +39,11 @@ pub fn parse_statements(src: &str) -> (Vec<Statement<'_>>, Vec<Issue>) {
     (statements, parser.issues)
 }
 
-pub fn parse_statement(src: &str) -> (Option<Statement<'_>>, Vec<Issue>) {
-    let mut parser = Parser::new(src);
-    let statements = statement::parse_statement(&mut parser);
-    (statements.ok(), parser.issues)
-}
+// pub fn parse_statement(src: &str) -> (Option<Statement<'_>>, Vec<Issue>) {
+//     let mut parser = Parser::new(src);
+//     let statements = statement::parse_statement(&mut parser);
+//     (statements.ok(), parser.issues)
+// }
 
 #[cfg(test)]
 mod tests {
