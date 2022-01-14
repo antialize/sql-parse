@@ -192,14 +192,11 @@ fn parse_add_alter_specification<'a>(
     };
     match &parser.token {
         Token::Ident(_, Keyword::FOREIGN) => {
-            let foregin_key_span = parser
-                .consume_keyword(Keyword::FOREIGN)?
-                .join_span(&parser.consume_keyword(Keyword::KEY)?);
+            let foregin_key_span = parser.consume_keywords(&[Keyword::FOREIGN, Keyword::KEY])?;
             let if_not_exists = if let Some(s) = parser.skip_keyword(Keyword::IF) {
                 Some(
                     parser
-                        .consume_keyword(Keyword::NOT)?
-                        .join_span(&parser.consume_keyword(Keyword::EXISTS)?)
+                        .consume_keywords(&[Keyword::NOT, Keyword::EXISTS])?
                         .join_span(&s),
                 )
             } else {
@@ -246,9 +243,7 @@ fn parse_add_alter_specification<'a>(
                         }
                     }
                     Token::Ident(_, Keyword::NO) => ForeginKeyOnAction::SetNull(
-                        parser
-                            .consume_keyword(Keyword::NO)?
-                            .join_span(&parser.consume_keyword(Keyword::ACTION)?),
+                        parser.consume_keywords(&[Keyword::NO, Keyword::ACTION])?,
                     ),
                     _ => parser.expected_failure("'RESTRICT' or 'CASCADE', 'SET' or 'NO")?,
                 };
@@ -277,11 +272,9 @@ fn parse_add_alter_specification<'a>(
             | Keyword::SPATIAL,
         ) => {
             let index_type = match &parser.token {
-                Token::Ident(_, Keyword::PRIMARY) => IndexType::Primary(
-                    parser
-                        .consume_keyword(Keyword::PRIMARY)?
-                        .join_span(&parser.consume_keyword(Keyword::KEY)?),
-                ),
+                Token::Ident(_, Keyword::PRIMARY) => {
+                    IndexType::Primary(parser.consume_keywords(&[Keyword::PRIMARY, Keyword::KEY])?)
+                }
                 Token::Ident(_, Keyword::INDEX | Keyword::KEY) => {
                     IndexType::Index(parser.consume())
                 }
@@ -321,8 +314,7 @@ fn parse_add_alter_specification<'a>(
             let if_not_exists = if let Some(s) = parser.skip_keyword(Keyword::IF) {
                 Some(
                     parser
-                        .consume_keyword(Keyword::NOT)?
-                        .join_span(&parser.consume_keyword(Keyword::EXISTS)?)
+                        .consume_keywords(&[Keyword::NOT, Keyword::EXISTS])?
                         .join_span(&s),
                 )
             } else {

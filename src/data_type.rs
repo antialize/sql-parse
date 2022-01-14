@@ -260,8 +260,7 @@ pub(crate) fn parse_data_type<'a>(parser: &mut Parser<'a>) -> Result<DataType<'a
                 ));
             }
             Token::Ident(_, Keyword::CHARACTER) => {
-                parser.consume_keyword(Keyword::CHARACTER)?;
-                parser.consume_keyword(Keyword::SET)?;
+                parser.consume_keywords(&[Keyword::CHARACTER, Keyword::SET])?;
                 properties.push(DataTypeProperty::Charset(
                     parser.consume_plain_identifier()?,
                 ));
@@ -301,9 +300,7 @@ pub(crate) fn parse_data_type<'a>(parser: &mut Parser<'a>) -> Result<DataType<'a
             }
             Token::Ident(_, Keyword::GENERATED) => {
                 properties.push(DataTypeProperty::GeneratedAlways(
-                    parser
-                        .consume_keyword(Keyword::GENERATED)?
-                        .join_span(&parser.consume_keyword(Keyword::ALWAYS)?),
+                    parser.consume_keywords(&[Keyword::GENERATED, Keyword::ALWAYS])?,
                 ))
             }
             Token::Ident(_, Keyword::AS) => {

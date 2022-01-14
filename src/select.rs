@@ -62,7 +62,14 @@ pub enum JoinType {
 pub enum TableReference<'a> {
     Table {
         identifier: Vec<(&'a str, Span)>,
+        as_span: Option<Span>,
         as_: Option<(&'a str, Span)>,
+    },
+    Query {
+        select: Box<Select<'a>>,
+        as_span: Option<Span>,
+        as_: (&'a str, Span),
+        //TODO collist
     },
     Join {
         join: JoinType,
@@ -82,37 +89,58 @@ pub(crate) fn parse_table_reference_inner<'a>(
         return Ok(a);
     }
 
-    let mut identifier = vec![parser.consume_plain_identifier()?];
-    loop {
-        if parser.skip_token(Token::Period).is_none() {
-            break;
+    match &parser.token {
+        Token::Ident(_, Keyword::SELECT) => {
+            let select = parse_select(parser)?;
+            let as_span = parser.skip_keyword(Keyword::AS);
+            let as_ = parser.consume_plain_identifier()?;
+            Ok(TableReference::Query {
+                select: Box::new(select),
+                as_span,
+                as_,
+            })
         }
-        identifier.push(parser.consume_plain_identifier()?);
+        Token::Ident(_, _) => {
+            let mut identifier = vec![parser.consume_plain_identifier()?];
+            loop {
+                if parser.skip_token(Token::Period).is_none() {
+                    break;
+                }
+                identifier.push(parser.consume_plain_identifier()?);
+            }
+
+            // index_hint_list:
+            //     index_hint [, index_hint] ...
+
+            // index_hint: {
+            //     USE {INDEX|KEY}
+            //       [FOR {JOIN|ORDER BY|GROUP BY}] ([index_list])
+            //   | {IGNORE|FORCE} {INDEX|KEY}
+            //       [FOR {JOIN|ORDER BY|GROUP BY}] (index_list)
+            // }
+
+            // index_list:
+            //     index_name [, index_name] .
+
+            // TODO [PARTITION (partition_names)] [[AS] alias]
+            let as_span = parser.skip_keyword(Keyword::AS);
+            let as_ = if as_span.is_some() {
+                Some(parser.consume_plain_identifier()?)
+            } else if matches!(&parser.token, Token::Ident(_, k) if !k.reserved()) {
+                Some(parser.consume_plain_identifier()?)
+            } else {
+                None
+            };
+
+            // TODO [index_hint_list]
+            Ok(TableReference::Table {
+                identifier,
+                as_span,
+                as_,
+            })
+        }
+        _ => parser.expected_failure("subquery or identifier"),
     }
-
-    // index_hint_list:
-    //     index_hint [, index_hint] ...
-
-    // index_hint: {
-    //     USE {INDEX|KEY}
-    //       [FOR {JOIN|ORDER BY|GROUP BY}] ([index_list])
-    //   | {IGNORE|FORCE} {INDEX|KEY}
-    //       [FOR {JOIN|ORDER BY|GROUP BY}] (index_list)
-    // }
-
-    // index_list:
-    //     index_name [, index_name] .
-
-    // TODO [PARTITION (partition_names)] [[AS] alias]
-    let as_ = if parser.skip_keyword(Keyword::AS).is_some() {
-        Some(parser.consume_plain_identifier()?)
-    } else {
-        None
-    };
-
-    // TODO [index_hint_list]
-    let ans = TableReference::Table { identifier, as_ };
-    Ok(ans)
 }
 
 pub(crate) fn parse_table_reference<'a>(
@@ -165,8 +193,7 @@ pub(crate) fn parse_table_reference<'a>(
                 match &parser.token {
                     Token::Ident(_, Keyword::INNER) => JoinType::NaturalInner(
                         natural
-                            .join_span(&parser.consume_keyword(Keyword::INNER)?)
-                            .join_span(&parser.consume_keyword(Keyword::JOIN)?),
+                            .join_span(&parser.consume_keywords(&[Keyword::INNER, Keyword::JOIN])?),
                     ),
                     Token::Ident(_, Keyword::LEFT) => {
                         let left = parser.consume_keyword(Keyword::LEFT)?;
@@ -262,8 +289,8 @@ pub struct Select<'a> {
     pub select_span: Span,
     pub flags: Vec<SelectFlag>,
     pub select_exprs: Vec<SelectExpr<'a>>,
-    pub from_span: Span,
-    pub table_references: Vec<TableReference<'a>>,
+    pub from_span: Option<Span>,
+    pub table_references: Option<Vec<TableReference<'a>>>,
     pub where_: Option<(Expression<'a>, Span)>,
     pub group_by: Option<(Span, Vec<Expression<'a>>)>,
     pub having_span: Option<Span>,
@@ -277,72 +304,70 @@ pub(crate) fn parse_select<'a>(parser: &mut Parser<'a>) -> Result<Select<'a>, Pa
     let mut flags = Vec::new();
     let mut select_exprs = Vec::new();
 
-    parser.recovered(
-        "FROM",
-        &|t| matches!(t, Token::Ident(_, Keyword::FROM)),
-        |parser| {
-            loop {
-                match &parser.token {
-                    Token::Ident(_, Keyword::ALL) => {
-                        flags.push(SelectFlag::All(parser.consume_keyword(Keyword::ALL)?))
-                    }
-                    Token::Ident(_, Keyword::DISTINCT) => flags.push(SelectFlag::Distinct(
-                        parser.consume_keyword(Keyword::DISTINCT)?,
-                    )),
-                    Token::Ident(_, Keyword::DISTINCTROW) => flags.push(SelectFlag::DistinctRow(
-                        parser.consume_keyword(Keyword::DISTINCTROW)?,
-                    )),
-                    Token::Ident(_, Keyword::HIGH_PRIORITY) => flags.push(
-                        SelectFlag::HighPriority(parser.consume_keyword(Keyword::HIGH_PRIORITY)?),
-                    ),
-                    Token::Ident(_, Keyword::STRAIGHT_JOIN) => flags.push(
-                        SelectFlag::StraightJoin(parser.consume_keyword(Keyword::STRAIGHT_JOIN)?),
-                    ),
-                    Token::Ident(_, Keyword::SQL_SMALL_RESULT) => {
-                        flags.push(SelectFlag::SqlSmallResult(
-                            parser.consume_keyword(Keyword::SQL_SMALL_RESULT)?,
-                        ))
-                    }
-                    Token::Ident(_, Keyword::SQL_BIG_RESULT) => flags.push(
-                        SelectFlag::SqlBigResult(parser.consume_keyword(Keyword::SQL_BIG_RESULT)?),
-                    ),
-                    Token::Ident(_, Keyword::SQL_BUFFER_RESULT) => {
-                        flags.push(SelectFlag::SqlBufferResult(
-                            parser.consume_keyword(Keyword::SQL_BUFFER_RESULT)?,
-                        ))
-                    }
-                    Token::Ident(_, Keyword::SQL_NO_CACHE) => flags.push(SelectFlag::SqlNoCache(
-                        parser.consume_keyword(Keyword::SQL_NO_CACHE)?,
-                    )),
-                    Token::Ident(_, Keyword::SQL_CALC_FOUND_ROWS) => {
-                        flags.push(SelectFlag::SqlCalcFoundRows(
-                            parser.consume_keyword(Keyword::SQL_CALC_FOUND_ROWS)?,
-                        ))
-                    }
-                    _ => break,
-                }
+    loop {
+        match &parser.token {
+            Token::Ident(_, Keyword::ALL) => {
+                flags.push(SelectFlag::All(parser.consume_keyword(Keyword::ALL)?))
             }
+            Token::Ident(_, Keyword::DISTINCT) => flags.push(SelectFlag::Distinct(
+                parser.consume_keyword(Keyword::DISTINCT)?,
+            )),
+            Token::Ident(_, Keyword::DISTINCTROW) => flags.push(SelectFlag::DistinctRow(
+                parser.consume_keyword(Keyword::DISTINCTROW)?,
+            )),
+            Token::Ident(_, Keyword::HIGH_PRIORITY) => flags.push(SelectFlag::HighPriority(
+                parser.consume_keyword(Keyword::HIGH_PRIORITY)?,
+            )),
+            Token::Ident(_, Keyword::STRAIGHT_JOIN) => flags.push(SelectFlag::StraightJoin(
+                parser.consume_keyword(Keyword::STRAIGHT_JOIN)?,
+            )),
+            Token::Ident(_, Keyword::SQL_SMALL_RESULT) => flags.push(SelectFlag::SqlSmallResult(
+                parser.consume_keyword(Keyword::SQL_SMALL_RESULT)?,
+            )),
+            Token::Ident(_, Keyword::SQL_BIG_RESULT) => flags.push(SelectFlag::SqlBigResult(
+                parser.consume_keyword(Keyword::SQL_BIG_RESULT)?,
+            )),
+            Token::Ident(_, Keyword::SQL_BUFFER_RESULT) => flags.push(SelectFlag::SqlBufferResult(
+                parser.consume_keyword(Keyword::SQL_BUFFER_RESULT)?,
+            )),
+            Token::Ident(_, Keyword::SQL_NO_CACHE) => flags.push(SelectFlag::SqlNoCache(
+                parser.consume_keyword(Keyword::SQL_NO_CACHE)?,
+            )),
+            Token::Ident(_, Keyword::SQL_CALC_FOUND_ROWS) => flags.push(
+                SelectFlag::SqlCalcFoundRows(parser.consume_keyword(Keyword::SQL_CALC_FOUND_ROWS)?),
+            ),
+            _ => break,
+        }
+    }
 
-            loop {
-                parser.recovered(
-                    "FROM or ','",
-                    &|t| matches!(t, Token::Ident(_, Keyword::FROM) | Token::Comma),
-                    |parser| {
-                        select_exprs.push(parse_select_expr(parser)?);
-                        Ok(())
-                    },
-                )?;
-                if parser.skip_token(Token::Comma).is_none() {
-                    break;
-                }
-            }
-            Ok(())
-        },
-    )?;
+    loop {
+        select_exprs.push(parse_select_expr(parser)?);
+        if parser.skip_token(Token::Comma).is_none() {
+            break;
+        }
+    }
 
     // TODO [into_option]
 
-    let from_span = parser.consume_keyword(Keyword::FROM)?;
+    let from_span = match parser.skip_keyword(Keyword::FROM) {
+        Some(v) => Some(v),
+        None => {
+            return Ok(Select {
+                select_span,
+                flags,
+                select_exprs,
+                from_span: None,
+                table_references: None,
+                where_: None,
+                group_by: None,
+                having_span: None,
+                window_span: None,
+                order_by: None,
+                limit: None,
+            })
+        }
+    };
+
     let mut table_references = Vec::new();
     loop {
         table_references.push(parse_table_reference(parser)?);
@@ -438,7 +463,7 @@ pub(crate) fn parse_select<'a>(parser: &mut Parser<'a>) -> Result<Select<'a>, Pa
         flags,
         select_exprs,
         from_span,
-        table_references,
+        table_references: Some(table_references),
         where_,
         group_by,
         having_span,

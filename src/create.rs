@@ -187,8 +187,11 @@ fn parse_create_view<'a>(
     let view_span = parser.consume_keyword(Keyword::VIEW)?;
 
     let if_not_exists = if let Some(if_) = parser.skip_keyword(Keyword::IF) {
-        parser.consume_keyword(Keyword::NOT)?;
-        Some(parser.consume_keyword(Keyword::EXISTS)?.join_span(&if_))
+        Some(
+            parser
+                .consume_keywords(&[Keyword::NOT, Keyword::EXISTS])?
+                .join_span(&if_),
+        )
     } else {
         None
     };
@@ -388,8 +391,11 @@ fn parse_create_trigger<'a>(
     let trigger_span = parser.consume_keyword(Keyword::TRIGGER)?;
 
     let if_not_exists = if let Some(if_) = parser.skip_keyword(Keyword::IF) {
-        parser.consume_keyword(Keyword::NOT)?;
-        Some(parser.consume_keyword(Keyword::EXISTS)?.join_span(&if_))
+        Some(
+            parser
+                .consume_keywords(&[Keyword::NOT, Keyword::EXISTS])?
+                .join_span(&if_),
+        )
     } else {
         None
     };
@@ -423,10 +429,8 @@ fn parse_create_trigger<'a>(
 
     let table = parser.consume_plain_identifier()?;
 
-    let for_each_row_span = parser
-        .consume_keyword(Keyword::FOR)?
-        .join_span(&parser.consume_keyword(Keyword::EACH)?)
-        .join_span(&parser.consume_keyword(Keyword::ROW)?);
+    let for_each_row_span =
+        parser.consume_keywords(&[Keyword::FOR, Keyword::EACH, Keyword::ROW])?;
 
     // TODO [{ FOLLOWS | PRECEDES } other_trigger_name ]
 
@@ -461,8 +465,12 @@ fn parse_create_table<'a>(
 
     parser.recovered("'('", &|t| t == &Token::LParen, |parser| {
         if let Some(if_) = parser.skip_keyword(Keyword::IF) {
-            parser.consume_keyword(Keyword::NOT)?;
-            if_not_exists = Some(if_.start..parser.consume_keyword(Keyword::EXISTS)?.end);
+            if_not_exists = Some(
+                if_.start
+                    ..parser
+                        .consume_keywords(&[Keyword::NOT, Keyword::EXISTS])?
+                        .end,
+            );
         }
         identifier = parser.consume_plain_identifier()?;
         Ok(())
@@ -603,9 +611,7 @@ pub(crate) fn parse_create<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>,
             loop {
                 let v = match &parser.token {
                     Token::Ident(_, Keyword::OR) => CreateOption::OrReplace(
-                        parser
-                            .consume_keyword(Keyword::OR)?
-                            .join_span(&parser.consume_keyword(Keyword::REPLACE)?),
+                        parser.consume_keywords(&[Keyword::OR, Keyword::REPLACE])?,
                     ),
                     Token::Ident(_, Keyword::TEMPORARY) => {
                         CreateOption::Temporary(parser.consume_keyword(Keyword::TEMPORARY)?)
@@ -641,9 +647,8 @@ pub(crate) fn parse_create<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>,
                         }
                     }
                     Token::Ident(_, Keyword::SQL) => {
-                        let sql_security = parser
-                            .consume_keyword(Keyword::SQL)?
-                            .join_span(&parser.consume_keyword(Keyword::SECURITY)?);
+                        let sql_security =
+                            parser.consume_keywords(&[Keyword::SQL, Keyword::SECURITY])?;
                         match &parser.token {
                             Token::Ident(_, Keyword::DEFINER) => CreateOption::SqlSecurityDefiner(
                                 sql_security,

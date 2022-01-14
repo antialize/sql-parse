@@ -143,9 +143,7 @@ fn parse_if<'a>(parser: &mut Parser<'a>) -> Result<If<'a>, ParseError> {
             Ok(())
         },
     )?;
-    let endif_span = parser
-        .consume_keyword(Keyword::END)?
-        .join_span(&parser.consume_keyword(Keyword::IF)?);
+    let endif_span = parser.consume_keywords(&[Keyword::END, Keyword::IF])?;
     Ok(If {
         if_span,
         conditions,
