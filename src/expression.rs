@@ -251,10 +251,10 @@ pub enum IdentifierPart<'a> {
 
 #[derive(Debug, Clone)]
 pub struct When<'a> {
-    when_span: Span,
-    when: Expression<'a>,
-    then_span: Span,
-    then: Expression<'a>,
+    pub when_span: Span,
+    pub when: Expression<'a>,
+    pub then_span: Span,
+    pub then: Expression<'a>,
 }
 
 #[derive(Debug, Clone)]
@@ -290,6 +290,7 @@ pub enum Expression<'a> {
     Invalid,
     Case {
         case_span: Span,
+        value: Option<Box<Expression<'a>>>,
         whens: Vec<When<'a>>,
         else_: Option<(Span, Box<Expression<'a>>)>,
         end_span: Span,
@@ -528,7 +529,7 @@ fn parse_function<'a>(
     Ok(Expression::Function(func, args, span))
 }
 
-const INTERVAL_PRIORITY: usize = 10;
+//const INTERVAL_PRIORITY: usize = 10;
 const IN_PRIORITY: usize = 110;
 
 trait Priority {
@@ -915,6 +916,11 @@ pub(crate) fn parse_expression<'a>(
             }
             Token::Ident(_, Keyword::CASE) => {
                 let case_span = parser.consume_keyword(Keyword::CASE)?;
+                let value = if !matches!(parser.token, Token::Ident(_, Keyword::WHEN)) {
+                    Some(Box::new(parse_expression(parser, false)?))
+                } else {
+                    None
+                };
                 let mut whens = Vec::new();
                 let mut else_ = None;
                 parser.recovered(
@@ -945,6 +951,7 @@ pub(crate) fn parse_expression<'a>(
                 let end_span = parser.consume_keyword(Keyword::END)?;
                 r.shift_expr(Expression::Case {
                     case_span,
+                    value,
                     whens,
                     else_,
                     end_span,
@@ -956,7 +963,6 @@ pub(crate) fn parse_expression<'a>(
             parser.error(e.to_string())?;
         }
     }
-
     if r.reduce(99999).is_err() {
         parser.error("Expected expression")
     } else if r.stack.len() != 1 {

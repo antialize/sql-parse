@@ -22,6 +22,7 @@ mod issue;
 mod keywords;
 mod lexer;
 mod parser;
+mod replace;
 mod select;
 mod span;
 mod statement;

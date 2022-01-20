@@ -15,7 +15,8 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Span, Spanned,
+    statement::parse_compound_query,
+    Span, Spanned, Statement,
 };
 
 #[derive(Debug, Clone)]
@@ -66,9 +67,9 @@ pub enum TableReference<'a> {
         as_: Option<(&'a str, Span)>,
     },
     Query {
-        select: Box<Select<'a>>,
+        query: Box<Statement<'a>>,
         as_span: Option<Span>,
-        as_: (&'a str, Span),
+        as_: Option<(&'a str, Span)>,
         //TODO collist
     },
     Join {
@@ -83,19 +84,25 @@ pub(crate) fn parse_table_reference_inner<'a>(
     parser: &mut Parser<'a>,
 ) -> Result<TableReference<'a>, ParseError> {
     // TODO [LATERAL] table_subquery [AS] alias [(col_list)]
-    if parser.skip_token(Token::LParen).is_some() {
-        let a = parse_table_reference(parser)?;
-        parser.consume_token(Token::RParen)?;
-        return Ok(a);
-    }
+    // if parser.skip_token(Token::LParen).is_some() {
+    //     let a = parse_table_reference(parser)?;
+    //     parser.consume_token(Token::RParen)?;
+    //     return Ok(a);
+    // }
 
     match &parser.token {
-        Token::Ident(_, Keyword::SELECT) => {
-            let select = parse_select(parser)?;
+        Token::Ident(_, Keyword::SELECT) | Token::LParen => {
+            let query = parse_compound_query(parser)?;
             let as_span = parser.skip_keyword(Keyword::AS);
-            let as_ = parser.consume_plain_identifier()?;
+            let as_ = if as_span.is_some() {
+                Some(parser.consume_plain_identifier()?)
+            } else if matches!(&parser.token, Token::Ident(_, k) if !k.reserved()) {
+                Some(parser.consume_plain_identifier()?)
+            } else {
+                None
+            };
             Ok(TableReference::Query {
-                select: Box::new(select),
+                query: Box::new(query),
                 as_span,
                 as_,
             })

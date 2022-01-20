@@ -23,7 +23,8 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    select::{parse_select, Select},
+    replace::{parse_replace, Replace},
+    select::{parse_select, OrderFlag, Select},
     update::{parse_update, Update},
     Level, Span, Spanned,
 };
@@ -53,7 +54,6 @@ fn parse_statement_list_inner<'a>(
     parser: &mut Parser<'a>,
     out: &mut Vec<Statement<'a>>,
 ) -> Result<(), ParseError> {
-    let old_delimiter = std::mem::replace(&mut parser.delimiter, Token::SemiColon);
     loop {
         while parser.skip_token(Token::SemiColon).is_some() {}
         match parse_statement(parser)? {
@@ -174,6 +174,16 @@ pub enum Statement<'a> {
     AlterTable(AlterTable<'a>),
     Block(Vec<Statement<'a>>),
     If(If<'a>),
+    Invalid,
+    Union(Union<'a>),
+    Replace(Replace<'a>),
+    Case(CaseStatement<'a>),
+}
+
+impl<'a> Default for Statement<'a> {
+    fn default() -> Self {
+        Self::Invalid
+    }
 }
 
 pub(crate) fn parse_statement<'a>(
@@ -182,7 +192,7 @@ pub(crate) fn parse_statement<'a>(
     Ok(match &parser.token {
         Token::Ident(_, Keyword::CREATE) => Some(parse_create(parser)?),
         Token::Ident(_, Keyword::DROP) => Some(parse_drop(parser)?),
-        Token::Ident(_, Keyword::SELECT) => Some(Statement::Select(parse_select(parser)?)),
+        Token::Ident(_, Keyword::SELECT) | Token::LParen => Some(parse_compound_query(parser)?),
         Token::Ident(_, Keyword::DELETE) => Some(Statement::Delete(parse_delete(parser)?)),
         Token::Ident(_, Keyword::INSERT) => Some(Statement::Insert(parse_insert(parser)?)),
         Token::Ident(_, Keyword::UPDATE) => Some(Statement::Update(parse_update(parser)?)),
@@ -190,8 +200,184 @@ pub(crate) fn parse_statement<'a>(
         Token::Ident(_, Keyword::BEGIN) => Some(Statement::Block(parse_block(parser)?)),
         Token::Ident(_, Keyword::IF) => Some(Statement::If(parse_if(parser)?)),
         Token::Ident(_, Keyword::ALTER) => Some(parse_alter(parser)?),
+        Token::Ident(_, Keyword::REPLACE) => Some(Statement::Replace(parse_replace(parser)?)),
+        Token::Ident(_, Keyword::CASE) => Some(Statement::Case(parse_case_statement(parser)?)),
         _ => None,
     })
+}
+
+#[derive(Clone, Debug)]
+pub struct WhenStatement<'a> {
+    pub when_span: Span,
+    pub when: Expression<'a>,
+    pub then_span: Span,
+    pub then: Vec<Statement<'a>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CaseStatement<'a> {
+    pub case_span: Span,
+    pub value: Box<Expression<'a>>,
+    pub whens: Vec<WhenStatement<'a>>,
+    pub else_: Option<(Span, Vec<Statement<'a>>)>,
+    pub end_span: Span,
+}
+
+pub(crate) fn parse_case_statement<'a>(
+    parser: &mut Parser<'a>,
+) -> Result<CaseStatement<'a>, ParseError> {
+    let case_span = parser.consume_keyword(Keyword::CASE)?;
+    let value = Box::new(parse_expression(parser, false)?);
+    let mut whens = Vec::new();
+    let mut else_ = None;
+    parser.recovered(
+        "'END'",
+        &|t| matches!(t, Token::Ident(_, Keyword::END)),
+        |parser| {
+            loop {
+                let when_span = parser.consume_keyword(Keyword::WHEN)?;
+                let when = parse_expression(parser, false)?;
+                let then_span = parser.consume_keyword(Keyword::THEN)?;
+                let mut then = Vec::new();
+                parse_statement_list(parser, &mut then)?;
+                whens.push(WhenStatement {
+                    when_span,
+                    when,
+                    then_span,
+                    then,
+                });
+                if !matches!(parser.token, Token::Ident(_, Keyword::WHEN)) {
+                    break;
+                }
+            }
+            if let Some(span) = parser.skip_keyword(Keyword::ELSE) {
+                let mut e = Vec::new();
+                parse_statement_list(parser, &mut e)?;
+                else_ = Some((span, e))
+            };
+            Ok(())
+        },
+    )?;
+    let end_span = parser.consume_keyword(Keyword::END)?;
+    Ok(CaseStatement {
+        case_span,
+        value,
+        whens,
+        else_,
+        end_span,
+    })
+}
+
+pub(crate) fn parse_compound_query_bottom<'a>(
+    parser: &mut Parser<'a>,
+) -> Result<Statement<'a>, ParseError> {
+    match &parser.token {
+        Token::LParen => {
+            parser.consume_token(Token::LParen)?;
+            let s = parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
+                parse_compound_query(parser)
+            })?;
+            parser.consume_token(Token::RParen)?;
+            Ok(s)
+        }
+        Token::Ident(_, Keyword::SELECT) => Ok(Statement::Select(parse_select(parser)?)),
+        _ => parser.expected_failure("'SELECET' or '('")?,
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum UnionType {
+    All(Span),
+    Distinct(Span),
+    Default,
+}
+
+#[derive(Clone, Debug)]
+pub struct UnionWith<'a> {
+    pub union_span: Span,
+    pub union_type: UnionType,
+    pub union_statement: Box<Statement<'a>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Union<'a> {
+    pub left: Box<Statement<'a>>,
+    pub with: Vec<UnionWith<'a>>,
+    pub order_by: Option<(Span, Vec<(Expression<'a>, OrderFlag)>)>,
+    pub limit: Option<(Span, Option<Expression<'a>>, Expression<'a>)>,
+}
+
+pub(crate) fn parse_compound_query<'a>(
+    parser: &mut Parser<'a>,
+) -> Result<Statement<'a>, ParseError> {
+    let q = parse_compound_query_bottom(parser)?;
+    if !matches!(parser.token, Token::Ident(_, Keyword::UNION)) {
+        return Ok(q);
+    };
+    let mut with = Vec::new();
+    loop {
+        let union_span = parser.consume_keyword(Keyword::UNION)?;
+        let union_type = match &parser.token {
+            Token::Ident(_, Keyword::ALL) => UnionType::All(parser.consume_keyword(Keyword::ALL)?),
+            Token::Ident(_, Keyword::DISTINCT) => {
+                UnionType::Distinct(parser.consume_keyword(Keyword::DISTINCT)?)
+            }
+            _ => UnionType::Default,
+        };
+        let union_statement = Box::new(parse_compound_query_bottom(parser)?);
+        with.push(UnionWith {
+            union_span,
+            union_type,
+            union_statement,
+        });
+        if !matches!(parser.token, Token::Ident(_, Keyword::UNION)) {
+            break;
+        }
+    }
+
+    let order_by = if let Some(span) = parser.skip_keyword(Keyword::ORDER) {
+        let span = parser.consume_keyword(Keyword::BY)?.join_span(&span);
+        let mut order = Vec::new();
+        loop {
+            let e = parse_expression(parser, false)?;
+            let f = match &parser.token {
+                Token::Ident(_, Keyword::ASC) => OrderFlag::Asc(parser.consume()),
+                Token::Ident(_, Keyword::DESC) => OrderFlag::Desc(parser.consume()),
+                _ => OrderFlag::None,
+            };
+            order.push((e, f));
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        Some((span, order))
+    } else {
+        None
+    };
+
+    let limit = if let Some(span) = parser.skip_keyword(Keyword::LIMIT) {
+        let n = parse_expression(parser, true)?;
+        match parser.token {
+            Token::Comma => {
+                parser.consume();
+                Some((span, Some(n), parse_expression(parser, true)?))
+            }
+            Token::Ident(_, Keyword::OFFSET) => {
+                parser.consume();
+                Some((span, Some(parse_expression(parser, true)?), n))
+            }
+            _ => Some((span, None, n)),
+        }
+    } else {
+        None
+    };
+
+    Ok(Statement::Union(Union {
+        left: Box::new(q),
+        with,
+        order_by,
+        limit,
+    }))
 }
 
 pub(crate) fn parse_statements<'a>(parser: &mut Parser<'a>) -> Vec<Statement<'a>> {

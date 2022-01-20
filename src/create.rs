@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{
     data_type::parse_data_type,
-    expression::parse_expression,
+    expression::{parse_expression, Expression},
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
@@ -374,6 +374,7 @@ pub struct CreateTrigger<'a> {
     pub create_span: Span,
     pub create_options: Vec<CreateOption<'a>>,
     pub trigger_span: Span,
+    pub if_not_exists: Option<Span>,
     pub name: (&'a str, Span),
     pub trigger_time: TriggerTime,
     pub trigger_event: TriggerEvent,
@@ -443,6 +444,7 @@ fn parse_create_trigger<'a>(
         create_span,
         create_options,
         trigger_span,
+        if_not_exists,
         name,
         trigger_time,
         trigger_event,
