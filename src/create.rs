@@ -117,6 +117,41 @@ pub enum TableOption<'a> {
     //UNION
 }
 
+impl<'a> Spanned for TableOption<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            TableOption::AutoExtendSize { identifier, value } => identifier.span().join_span(value),
+            TableOption::AutoIncrement { identifier, value } => identifier.span().join_span(value),
+            TableOption::AvgRowLength { identifier, value } => identifier.span().join_span(value),
+            TableOption::CharSet { identifier, value } => identifier.span().join_span(value),
+            TableOption::DefaultCharSet { identifier, value } => identifier.span().join_span(value),
+            TableOption::Checksum { identifier, value } => identifier.span().join_span(value),
+            TableOption::Collate { identifier, value } => identifier.span().join_span(value),
+            TableOption::DefaultCollate { identifier, value } => identifier.span().join_span(value),
+            TableOption::Comment { identifier, value } => identifier.span().join_span(value),
+            TableOption::Compression { identifier, value } => identifier.span().join_span(value),
+            TableOption::Connection { identifier, value } => identifier.span().join_span(value),
+            TableOption::DataDirectory { identifier, value } => identifier.span().join_span(value),
+            TableOption::IndexDirectory { identifier, value } => identifier.span().join_span(value),
+            TableOption::DelayKeyWrite { identifier, value } => identifier.span().join_span(value),
+            TableOption::Encryption { identifier, value } => identifier.span().join_span(value),
+            TableOption::Engine { identifier, value } => identifier.span().join_span(value),
+            TableOption::EngineAttribute { identifier, value } => {
+                identifier.span().join_span(value)
+            }
+            TableOption::InsertMethod { identifier, value } => identifier.span().join_span(value),
+            TableOption::KeyBlockSize { identifier, value } => identifier.span().join_span(value),
+            TableOption::MaxRows { identifier, value } => identifier.span().join_span(value),
+            TableOption::MinRows { identifier, value } => identifier.span().join_span(value),
+            TableOption::Password { identifier, value } => identifier.span().join_span(value),
+            TableOption::RowFormat { identifier, value } => identifier.span().join_span(value),
+            TableOption::SecondaryEngineAttribute { identifier, value } => {
+                identifier.span().join_span(value)
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum CreateDefinition<'a> {
     ColumnDefinition {
@@ -125,11 +160,31 @@ pub enum CreateDefinition<'a> {
     },
 }
 
+impl<'a> Spanned for CreateDefinition<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            CreateDefinition::ColumnDefinition {
+                identifier,
+                data_type,
+            } => identifier.span().join_span(data_type),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum CreateAlgorithm {
     Undefined(Span),
     Merge(Span),
     TempTable(Span),
+}
+impl<'a> Spanned for CreateAlgorithm {
+    fn span(&self) -> Span {
+        match &self {
+            CreateAlgorithm::Undefined(s) => s.span(),
+            CreateAlgorithm::Merge(s) => s.span(),
+            CreateAlgorithm::TempTable(s) => s.span(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -145,6 +200,23 @@ pub enum CreateOption<'a> {
     SqlSecurityDefiner(Span, Span),
     SqlSecurityUser(Span, Span),
 }
+impl<'a> Spanned for CreateOption<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            CreateOption::OrReplace(v) => v.span(),
+            CreateOption::Temporary(v) => v.span(),
+            CreateOption::Algorithm(s, a) => s.join_span(a),
+            CreateOption::Definer {
+                definer_span,
+                user,
+                host,
+            } => definer_span.join_span(user).join_span(host),
+            CreateOption::SqlSecurityDefiner(a, b) => a.join_span(b),
+            CreateOption::SqlSecurityUser(a, b) => a.join_span(b),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CreateTable<'a> {
     pub create_span: Span,
@@ -156,6 +228,18 @@ pub struct CreateTable<'a> {
     pub options: Vec<TableOption<'a>>,
 }
 
+impl<'a> Spanned for CreateTable<'a> {
+    fn span(&self) -> Span {
+        self.create_span
+            .join_span(&self.create_options)
+            .join_span(&self.table_span)
+            .join_span(&self.identifier)
+            .join_span(&self.if_not_exists)
+            .join_span(&self.create_definitions)
+            .join_span(&self.options)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CreateView<'a> {
     pub create_span: Span,
@@ -165,6 +249,18 @@ pub struct CreateView<'a> {
     pub name: (&'a str, Span),
     pub as_span: Span,
     pub select: Select<'a>,
+}
+
+impl<'a> Spanned for CreateView<'a> {
+    fn span(&self) -> Span {
+        self.create_span
+            .join_span(&self.create_options)
+            .join_span(&self.view_span)
+            .join_span(&self.if_not_exists)
+            .join_span(&self.name)
+            .join_span(&self.as_span)
+            .join_span(&self.select)
+    }
 }
 
 pub(crate) fn parse_create_definition<'a>(
@@ -230,6 +326,23 @@ pub enum FunctionCharacteristic<'a> {
     Comment((Cow<'a, str>, Span)),
 }
 
+impl<'a> Spanned for FunctionCharacteristic<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            FunctionCharacteristic::LanguageSql(v) => v.span(),
+            FunctionCharacteristic::NotDeterministic(v) => v.span(),
+            FunctionCharacteristic::Deterministic(v) => v.span(),
+            FunctionCharacteristic::ContainsSql(v) => v.span(),
+            FunctionCharacteristic::NoSql(v) => v.span(),
+            FunctionCharacteristic::ReadsSqlData(v) => v.span(),
+            FunctionCharacteristic::ModifiesSqlData(v) => v.span(),
+            FunctionCharacteristic::SqlSecurityDefiner(v) => v.span(),
+            FunctionCharacteristic::SqlSecurityUser(v) => v.span(),
+            FunctionCharacteristic::Comment(v) => v.span(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CreateFunction<'a> {
     pub create_span: Span,
@@ -243,6 +356,20 @@ pub struct CreateFunction<'a> {
     pub characteristics: Vec<FunctionCharacteristic<'a>>,
     pub return_span: Span,
     pub return_: Box<Statement<'a>>,
+}
+
+impl<'a> Spanned for CreateFunction<'a> {
+    fn span(&self) -> Span {
+        self.create_span
+            .join_span(&self.create_options)
+            .join_span(&self.function_span)
+            .join_span(&self.if_not_exists)
+            .join_span(&self.name)
+            .join_span(&self.return_type)
+            .join_span(&self.characteristics)
+            .join_span(&self.return_span)
+            .join_span(&self.return_)
+    }
 }
 
 fn parse_create_function<'a>(
@@ -362,11 +489,30 @@ pub enum TriggerTime {
     After(Span),
 }
 
+impl Spanned for TriggerTime {
+    fn span(&self) -> Span {
+        match &self {
+            TriggerTime::Before(v) => v.span(),
+            TriggerTime::After(v) => v.span(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum TriggerEvent {
     Update(Span),
     Insert(Span),
     Delete(Span),
+}
+
+impl Spanned for TriggerEvent {
+    fn span(&self) -> Span {
+        match &self {
+            TriggerEvent::Update(v) => v.span(),
+            TriggerEvent::Insert(v) => v.span(),
+            TriggerEvent::Delete(v) => v.span(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -382,6 +528,22 @@ pub struct CreateTrigger<'a> {
     pub table: (&'a str, Span),
     pub for_each_row_span: Span,
     pub statement: Box<Statement<'a>>,
+}
+
+impl<'a> Spanned for CreateTrigger<'a> {
+    fn span(&self) -> Span {
+        self.create_span
+            .join_span(&self.create_options)
+            .join_span(&self.trigger_span)
+            .join_span(&self.if_not_exists)
+            .join_span(&self.name)
+            .join_span(&self.trigger_time)
+            .join_span(&self.trigger_event)
+            .join_span(&self.on_span)
+            .join_span(&self.table)
+            .join_span(&self.for_each_row_span)
+            .join_span(&self.statement)
+    }
 }
 
 fn parse_create_trigger<'a>(

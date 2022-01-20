@@ -16,13 +16,23 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_table_reference, TableReference},
-    Span,
+    span::OptSpanned,
+    Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
 pub enum UpdateFlag {
     LowPriority(Span),
     Ignore(Span),
+}
+
+impl Spanned for UpdateFlag {
+    fn span(&self) -> Span {
+        match &self {
+            UpdateFlag::LowPriority(v) => v.span(),
+            UpdateFlag::Ignore(v) => v.span(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -33,6 +43,22 @@ pub struct Update<'a> {
     pub set_span: Span,
     pub set: Vec<(Vec<(&'a str, Span)>, Expression<'a>)>,
     pub where_: Option<(Expression<'a>, Span)>,
+}
+
+impl<'a> Spanned for Update<'a> {
+    fn span(&self) -> Span {
+        let mut set_span = None;
+        for (a, b) in &self.set {
+            set_span = set_span.opt_join_span(a).opt_join_span(b)
+        }
+
+        self.update_span
+            .join_span(&self.flags)
+            .join_span(&self.tables)
+            .join_span(&self.set_span)
+            .join_span(&set_span)
+            .join_span(&self.where_)
+    }
 }
 
 pub(crate) fn parse_update<'a>(parser: &mut Parser<'a>) -> Result<Update<'a>, ParseError> {

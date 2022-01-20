@@ -25,6 +25,7 @@ use crate::{
     parser::{ParseError, Parser},
     replace::{parse_replace, Replace},
     select::{parse_select, OrderFlag, Select},
+    span::OptSpanned,
     update::{parse_update, Update},
     Level, Span, Spanned,
 };
@@ -33,6 +34,12 @@ use crate::{
 pub struct Set<'a> {
     pub set_span: Span,
     pub values: Vec<((&'a str, Span), Expression<'a>)>,
+}
+
+impl<'a> Spanned for Set<'a> {
+    fn span(&self) -> Span {
+        self.set_span.join_span(&self.values)
+    }
 }
 
 fn parse_set<'a>(parser: &mut Parser<'a>) -> Result<Set<'a>, ParseError> {
@@ -97,12 +104,31 @@ pub struct IfCondition<'a> {
     pub then: Vec<Statement<'a>>,
 }
 
+impl<'a> Spanned for IfCondition<'a> {
+    fn span(&self) -> Span {
+        self.then_span
+            .join_span(&self.elseif_span)
+            .join_span(&self.search_condition)
+            .join_span(&self.then_span)
+            .join_span(&self.then)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct If<'a> {
     pub if_span: Span,
     pub conditions: Vec<IfCondition<'a>>,
     pub else_: Option<(Span, Vec<Statement<'a>>)>,
     pub endif_span: Span,
+}
+
+impl<'a> Spanned for If<'a> {
+    fn span(&self) -> Span {
+        self.if_span
+            .join_span(&self.conditions)
+            .join_span(&self.else_)
+            .join_span(&self.endif_span)
+    }
 }
 
 fn parse_if<'a>(parser: &mut Parser<'a>) -> Result<If<'a>, ParseError> {
@@ -172,7 +198,7 @@ pub enum Statement<'a> {
     DropView(DropView<'a>),
     Set(Set<'a>),
     AlterTable(AlterTable<'a>),
-    Block(Vec<Statement<'a>>),
+    Block(Vec<Statement<'a>>), //TODO we should include begin and end
     If(If<'a>),
     Invalid,
     Union(Union<'a>),
@@ -183,6 +209,37 @@ pub enum Statement<'a> {
 impl<'a> Default for Statement<'a> {
     fn default() -> Self {
         Self::Invalid
+    }
+}
+
+impl<'a> Spanned for Statement<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            Statement::CreateTable(v) => v.span(),
+            Statement::CreateView(v) => v.span(),
+            Statement::CreateTrigger(v) => v.span(),
+            Statement::CreateFunction(v) => v.span(),
+            Statement::Select(v) => v.span(),
+            Statement::Delete(v) => v.span(),
+            Statement::Insert(v) => v.span(),
+            Statement::Update(v) => v.span(),
+            Statement::DropTable(v) => v.span(),
+            Statement::DropFunction(v) => v.span(),
+            Statement::DropProcedure(v) => v.span(),
+            Statement::DropEvent(v) => v.span(),
+            Statement::DropDatabase(v) => v.span(),
+            Statement::DropServer(v) => v.span(),
+            Statement::DropTrigger(v) => v.span(),
+            Statement::DropView(v) => v.span(),
+            Statement::Set(v) => v.span(),
+            Statement::AlterTable(v) => v.span(),
+            Statement::Block(v) => v.opt_span().unwrap(),
+            Statement::If(v) => v.span(),
+            Statement::Invalid => todo!(),
+            Statement::Union(v) => v.span(),
+            Statement::Replace(v) => v.span(),
+            Statement::Case(v) => v.span(),
+        }
     }
 }
 
@@ -214,6 +271,15 @@ pub struct WhenStatement<'a> {
     pub then: Vec<Statement<'a>>,
 }
 
+impl<'a> Spanned for WhenStatement<'a> {
+    fn span(&self) -> Span {
+        self.when_span
+            .join_span(&self.when)
+            .join_span(&self.then_span)
+            .join_span(&self.then)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CaseStatement<'a> {
     pub case_span: Span,
@@ -221,6 +287,16 @@ pub struct CaseStatement<'a> {
     pub whens: Vec<WhenStatement<'a>>,
     pub else_: Option<(Span, Vec<Statement<'a>>)>,
     pub end_span: Span,
+}
+
+impl<'a> Spanned for CaseStatement<'a> {
+    fn span(&self) -> Span {
+        self.case_span
+            .join_span(&self.value)
+            .join_span(&self.whens)
+            .join_span(&self.else_)
+            .join_span(&self.end_span)
+    }
 }
 
 pub(crate) fn parse_case_statement<'a>(
@@ -292,11 +368,29 @@ pub enum UnionType {
     Default,
 }
 
+impl OptSpanned for UnionType {
+    fn opt_span(&self) -> Option<Span> {
+        match &self {
+            UnionType::All(v) => v.opt_span(),
+            UnionType::Distinct(v) => v.opt_span(),
+            UnionType::Default => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct UnionWith<'a> {
     pub union_span: Span,
     pub union_type: UnionType,
     pub union_statement: Box<Statement<'a>>,
+}
+
+impl<'a> Spanned for UnionWith<'a> {
+    fn span(&self) -> Span {
+        self.union_span
+            .join_span(&self.union_type)
+            .join_span(&self.union_statement)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -305,6 +399,15 @@ pub struct Union<'a> {
     pub with: Vec<UnionWith<'a>>,
     pub order_by: Option<(Span, Vec<(Expression<'a>, OrderFlag)>)>,
     pub limit: Option<(Span, Option<Expression<'a>>, Expression<'a>)>,
+}
+
+impl<'a> Spanned for Union<'a> {
+    fn span(&self) -> Span {
+        self.left
+            .join_span(&self.with)
+            .join_span(&self.order_by)
+            .join_span(&self.limit)
+    }
 }
 
 pub(crate) fn parse_compound_query<'a>(

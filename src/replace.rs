@@ -16,13 +16,22 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
-    Span,
+    Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
 pub enum ReplaceFlag {
     LowPriority(Span),
     Delayed(Span),
+}
+
+impl<'a> Spanned for ReplaceFlag {
+    fn span(&self) -> Span {
+        match &self {
+            ReplaceFlag::LowPriority(v) => v.span(),
+            ReplaceFlag::Delayed(v) => v.span(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -33,6 +42,17 @@ pub struct Replace<'a> {
     pub table: Vec<(&'a str, Span)>,
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
     pub select: Option<Select<'a>>,
+}
+
+impl<'a> Spanned for Replace<'a> {
+    fn span(&self) -> Span {
+        self.replace_span
+            .join_span(&self.flags)
+            .join_span(&self.into_span)
+            .join_span(&self.table)
+            .join_span(&self.values)
+            .join_span(&self.select)
+    }
 }
 
 pub(crate) fn parse_replace<'a>(parser: &mut Parser<'a>) -> Result<Replace<'a>, ParseError> {

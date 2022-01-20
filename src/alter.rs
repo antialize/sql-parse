@@ -27,6 +27,17 @@ pub enum IndexOption<'a> {
     Comment((Cow<'a, str>, Span)),
 }
 
+impl<'a> Spanned for IndexOption<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            IndexOption::IndexTypeBTree(v) => v.span(),
+            IndexOption::IndexTypeHash(v) => v.span(),
+            IndexOption::IndexTypeRTree(v) => v.span(),
+            IndexOption::Comment(v) => v.span(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum IndexType {
     Index(Span),
@@ -36,10 +47,31 @@ pub enum IndexType {
     Spatial(Span),
 }
 
+impl Spanned for IndexType {
+    fn span(&self) -> Span {
+        match &self {
+            IndexType::Index(v) => v.span(),
+            IndexType::Primary(v) => v.span(),
+            IndexType::Unique(v) => v.span(),
+            IndexType::FullText(v) => v.span(),
+            IndexType::Spatial(v) => v.span(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum ForeginKeyOnType {
     Update(Span),
     Delete(Span),
+}
+
+impl Spanned for ForeginKeyOnType {
+    fn span(&self) -> Span {
+        match &self {
+            ForeginKeyOnType::Update(v) => v.span(),
+            ForeginKeyOnType::Delete(v) => v.span(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -51,10 +83,28 @@ pub enum ForeginKeyOnAction {
     SetDefault(Span),
 }
 
+impl Spanned for ForeginKeyOnAction {
+    fn span(&self) -> Span {
+        match &self {
+            ForeginKeyOnAction::Restrict(v) => v.span(),
+            ForeginKeyOnAction::Cascade(v) => v.span(),
+            ForeginKeyOnAction::SetNull(v) => v.span(),
+            ForeginKeyOnAction::NoAction(v) => v.span(),
+            ForeginKeyOnAction::SetDefault(v) => v.span(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ForeginKeyOn {
     pub type_: ForeginKeyOnType,
     pub action: ForeginKeyOnAction,
+}
+
+impl Spanned for ForeginKeyOn {
+    fn span(&self) -> Span {
+        self.type_.join_span(&self.action)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -63,9 +113,14 @@ pub struct IndexCol<'a> {
     pub size: Option<(u32, Span)>,
 }
 
+impl<'a> Spanned for IndexCol<'a> {
+    fn span(&self) -> Span {
+        self.name.join_span(&self.size)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum AlterSpecification<'a> {
-    Dummy(&'a str),
     AddIndex {
         add_span: Span,
         index_type: IndexType,
@@ -93,6 +148,58 @@ pub enum AlterSpecification<'a> {
         col: (&'a str, Span),
         definition: DataType<'a>,
     },
+}
+
+impl<'a> Spanned for AlterSpecification<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            AlterSpecification::AddIndex {
+                add_span,
+                index_type,
+                if_not_exists,
+                name,
+                constraint,
+                cols,
+                index_options,
+            } => add_span
+                .join_span(index_type)
+                .join_span(if_not_exists)
+                .join_span(name)
+                .join_span(constraint)
+                .join_span(cols)
+                .join_span(index_options),
+            AlterSpecification::AddForeginKey {
+                add_span,
+                constraint,
+                foregin_key_span,
+                if_not_exists,
+                name,
+                cols,
+                references_span,
+                references_table,
+                references_cols,
+                ons,
+            } => add_span
+                .join_span(constraint)
+                .join_span(foregin_key_span)
+                .join_span(if_not_exists)
+                .join_span(name)
+                .join_span(cols)
+                .join_span(references_span)
+                .join_span(references_table)
+                .join_span(references_cols)
+                .join_span(ons),
+            AlterSpecification::Modify {
+                modify_span,
+                if_exists,
+                col,
+                definition,
+            } => modify_span
+                .join_span(if_exists)
+                .join_span(col)
+                .join_span(definition),
+        }
+    }
 }
 
 fn parse_index_type<'a>(
@@ -356,6 +463,18 @@ pub struct AlterTable<'a> {
     pub if_exists: Option<Span>,
     pub table: (&'a str, Span),
     pub alter_specifications: Vec<AlterSpecification<'a>>,
+}
+
+impl<'a> Spanned for AlterTable<'a> {
+    fn span(&self) -> Span {
+        self.alter_span
+            .join_span(&self.online)
+            .join_span(&self.ignore)
+            .join_span(&self.table_span)
+            .join_span(&self.if_exists)
+            .join_span(&self.table)
+            .join_span(&self.alter_specifications)
+    }
 }
 
 fn parse_alter_table<'a>(

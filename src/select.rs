@@ -15,6 +15,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
+    span::OptSpanned,
     statement::parse_compound_query,
     Span, Spanned, Statement,
 };
@@ -23,6 +24,12 @@ use crate::{
 pub struct SelectExpr<'a> {
     pub expr: Expression<'a>,
     pub as_: Option<(&'a str, Span)>,
+}
+
+impl<'a> Spanned for SelectExpr<'a> {
+    fn span(&self) -> Span {
+        self.expr.join_span(&self.as_)
+    }
 }
 
 pub(crate) fn parse_select_expr<'a>(parser: &mut Parser<'a>) -> Result<SelectExpr<'a>, ParseError> {
@@ -41,6 +48,15 @@ pub enum JoinSpecification<'a> {
     Using(Vec<(&'a str, Span)>, Span),
 }
 
+impl<'a> Spanned for JoinSpecification<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            JoinSpecification::On(v, s) => s.join_span(v),
+            JoinSpecification::Using(v, s) => s.join_span(v),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum JoinType {
     Inner(Span),
@@ -57,6 +73,26 @@ pub enum JoinType {
     NaturalRight(Span),
     NaturalLeftOuter(Span),
     NaturalRightOuter(Span),
+}
+impl Spanned for JoinType {
+    fn span(&self) -> Span {
+        match &self {
+            JoinType::Inner(v) => v.span(),
+            JoinType::Cross(v) => v.span(),
+            JoinType::Normal(v) => v.span(),
+            JoinType::Straight(v) => v.span(),
+            JoinType::Left(v) => v.span(),
+            JoinType::Right(v) => v.span(),
+            JoinType::LeftOuter(v) => v.span(),
+            JoinType::RightOuter(v) => v.span(),
+            JoinType::Natural(v) => v.span(),
+            JoinType::NaturalInner(v) => v.span(),
+            JoinType::NaturalLeft(v) => v.span(),
+            JoinType::NaturalRight(v) => v.span(),
+            JoinType::NaturalLeftOuter(v) => v.span(),
+            JoinType::NaturalRightOuter(v) => v.span(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +114,35 @@ pub enum TableReference<'a> {
         right: Box<TableReference<'a>>,
         specification: Option<JoinSpecification<'a>>,
     },
+}
+
+impl<'a> Spanned for TableReference<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            TableReference::Table {
+                identifier,
+                as_span,
+                as_,
+            } => identifier
+                .opt_join_span(as_span)
+                .opt_join_span(as_)
+                .unwrap(),
+            TableReference::Query {
+                query,
+                as_span,
+                as_,
+            } => query.join_span(as_span).join_span(as_),
+            TableReference::Join {
+                join,
+                left,
+                right,
+                specification,
+            } => join
+                .join_span(left)
+                .join_span(right)
+                .join_span(specification),
+        }
+    }
 }
 
 pub(crate) fn parse_table_reference_inner<'a>(
@@ -284,11 +349,37 @@ pub enum SelectFlag {
     SqlCalcFoundRows(Span),
 }
 
+impl<'a> Spanned for SelectFlag {
+    fn span(&self) -> Span {
+        match &self {
+            SelectFlag::All(v) => v.span(),
+            SelectFlag::Distinct(v) => v.span(),
+            SelectFlag::DistinctRow(v) => v.span(),
+            SelectFlag::HighPriority(v) => v.span(),
+            SelectFlag::StraightJoin(v) => v.span(),
+            SelectFlag::SqlSmallResult(v) => v.span(),
+            SelectFlag::SqlBigResult(v) => v.span(),
+            SelectFlag::SqlBufferResult(v) => v.span(),
+            SelectFlag::SqlNoCache(v) => v.span(),
+            SelectFlag::SqlCalcFoundRows(v) => v.span(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum OrderFlag {
     Asc(Span),
     Desc(Span),
     None,
+}
+impl OptSpanned for OrderFlag {
+    fn opt_span(&self) -> Option<Span> {
+        match &self {
+            OrderFlag::Asc(v) => v.opt_span(),
+            OrderFlag::Desc(v) => v.opt_span(),
+            OrderFlag::None => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -304,6 +395,21 @@ pub struct Select<'a> {
     pub window_span: Option<Span>,
     pub order_by: Option<(Span, Vec<(Expression<'a>, OrderFlag)>)>,
     pub limit: Option<(Span, Option<Expression<'a>>, Expression<'a>)>,
+}
+impl<'a> Spanned for Select<'a> {
+    fn span(&self) -> Span {
+        self.select_span
+            .join_span(&self.flags)
+            .join_span(&self.select_exprs)
+            .join_span(&self.from_span)
+            .join_span(&self.table_references)
+            .join_span(&self.where_)
+            .join_span(&self.group_by)
+            .join_span(&self.having_span)
+            .join_span(&self.window_span)
+            .join_span(&self.order_by)
+            .join_span(&self.limit)
+    }
 }
 
 pub(crate) fn parse_select<'a>(parser: &mut Parser<'a>) -> Result<Select<'a>, ParseError> {

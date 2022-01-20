@@ -17,6 +17,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
+    span::OptSpanned,
     Level, Span, Spanned,
 };
 
@@ -249,12 +250,30 @@ pub enum IdentifierPart<'a> {
     Star(Span),
 }
 
+impl<'a> Spanned for IdentifierPart<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            IdentifierPart::Name(v) => v.span(),
+            IdentifierPart::Star(v) => v.span(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct When<'a> {
     pub when_span: Span,
     pub when: Expression<'a>,
     pub then_span: Span,
     pub then: Expression<'a>,
+}
+
+impl<'a> Spanned for When<'a> {
+    fn span(&self) -> Span {
+        self.when_span
+            .join_span(&self.when)
+            .join_span(&self.then_span)
+            .join_span(&self.then)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -295,6 +314,53 @@ pub enum Expression<'a> {
         else_: Option<(Span, Box<Expression<'a>>)>,
         end_span: Span,
     },
+}
+
+impl<'a> Spanned for Expression<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            Expression::Binary {
+                op,
+                op_span,
+                lhs,
+                rhs,
+            } => op_span.join_span(lhs).join_span(rhs),
+            Expression::Unary {
+                op,
+                op_span,
+                operand,
+            } => op_span.join_span(operand),
+            Expression::Subquery(v) => v.span(),
+            Expression::Null(v) => v.span(),
+            Expression::Bool(_, v) => v.span(),
+            Expression::String(v) => v.span(),
+            Expression::Integer(v) => v.span(),
+            Expression::Float(v) => v.span(),
+            Expression::Function(_, b, c) => c.join_span(b),
+            Expression::Identifier(v) => v.opt_span().unwrap(),
+            Expression::Arg(v) => v.span(),
+            Expression::Exists(v) => v.span(),
+            Expression::In {
+                lhs,
+                rhs,
+                in_span,
+                not_in,
+            } => in_span.join_span(lhs).join_span(rhs),
+            Expression::Is(a, _, b) => b.join_span(a),
+            Expression::Invalid => todo!(),
+            Expression::Case {
+                case_span,
+                value,
+                whens,
+                else_,
+                end_span,
+            } => case_span
+                .join_span(value)
+                .join_span(whens)
+                .join_span(else_)
+                .join_span(end_span),
+        }
+    }
 }
 
 impl<'a> Default for Expression<'a> {

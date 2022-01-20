@@ -15,7 +15,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Span,
+    Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
@@ -25,6 +25,16 @@ pub enum DeleteFlag {
     Ignore(Span),
 }
 
+impl Spanned for DeleteFlag {
+    fn span(&self) -> Span {
+        match &self {
+            DeleteFlag::LowPriority(v) => v.span(),
+            DeleteFlag::Quick(v) => v.span(),
+            DeleteFlag::Ignore(v) => v.span(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Delete<'a> {
     pub delete_span: Span,
@@ -32,6 +42,16 @@ pub struct Delete<'a> {
     pub from_span: Span,
     pub table: Vec<(&'a str, Span)>,
     pub where_: Option<(Expression<'a>, Span)>,
+}
+
+impl<'a> Spanned for Delete<'a> {
+    fn span(&self) -> Span {
+        self.delete_span
+            .join_span(&self.flags)
+            .join_span(&self.from_span)
+            .join_span(&self.table)
+            .join_span(&self.where_)
+    }
 }
 
 pub(crate) fn parse_delete<'a>(parser: &mut Parser<'a>) -> Result<Delete<'a>, ParseError> {

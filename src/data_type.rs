@@ -17,6 +17,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
+    span::OptSpanned,
     Span, Spanned,
 };
 
@@ -40,6 +41,30 @@ pub enum DataTypeProperty<'a> {
     GeneratedAlways(Span),
     AutoIncrement(Span),
     As((Span, Box<Expression<'a>>)),
+}
+
+impl<'a> Spanned for DataTypeProperty<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            DataTypeProperty::Signed(v) => v.span(),
+            DataTypeProperty::Unsigned(v) => v.span(),
+            DataTypeProperty::Zerofill(v) => v.span(),
+            DataTypeProperty::Null(v) => v.span(),
+            DataTypeProperty::NotNull(v) => v.span(),
+            DataTypeProperty::Default(v) => v.span(),
+            DataTypeProperty::Comment(v) => v.span(),
+            DataTypeProperty::Charset(v) => v.span(),
+            DataTypeProperty::Collate(v) => v.span(),
+            DataTypeProperty::Virtual(v) => v.span(),
+            DataTypeProperty::Persistent(v) => v.span(),
+            DataTypeProperty::Stored(v) => v.span(),
+            DataTypeProperty::Unique(v) => v.span(),
+            DataTypeProperty::UniqueKey(v) => v.span(),
+            DataTypeProperty::GeneratedAlways(v) => v.span(),
+            DataTypeProperty::AutoIncrement(v) => v.span(),
+            DataTypeProperty::As((s, v)) => s.join_span(v),
+        }
+    }
 }
 
 // impl<'a> Spanned for DataTypeProperty<'a> {
@@ -84,11 +109,48 @@ pub enum Type<'a> {
     VarBinary((usize, Span)),
 }
 
+impl<'a> OptSpanned for Type<'a> {
+    fn opt_span(&self) -> Option<Span> {
+        match &self {
+            Type::TinyInt(v) => v.opt_span(),
+            Type::SmallInt(v) => v.opt_span(),
+            Type::Int(v) => v.opt_span(),
+            Type::BigInt(v) => v.opt_span(),
+            Type::VarChar(v) => v.opt_span(),
+            Type::TinyText(v) => v.opt_span(),
+            Type::MediumText(v) => v.opt_span(),
+            Type::Text(v) => v.opt_span(),
+            Type::LongText(v) => v.opt_span(),
+            Type::Enum(v) => v.opt_span(),
+            Type::Set(v) => v.opt_span(),
+            Type::Float(v) => v.opt_span(),
+            Type::Double(v) => v.opt_span(),
+            Type::DateTime(v) => v.opt_span(),
+            Type::Timestamp(v) => v.opt_span(),
+            Type::Time(v) => v.opt_span(),
+            Type::TinyBlob(v) => v.opt_span(),
+            Type::MediumBlob(v) => v.opt_span(),
+            Type::Date => None,
+            Type::Blob(v) => v.opt_span(),
+            Type::LongBlob(v) => v.opt_span(),
+            Type::VarBinary(v) => v.opt_span(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DataType<'a> {
     pub identifier: Span,
     pub type_: Type<'a>,
     pub properties: Vec<DataTypeProperty<'a>>,
+}
+
+impl<'a> Spanned for DataType<'a> {
+    fn span(&self) -> Span {
+        self.identifier
+            .join_span(&self.type_)
+            .join_span(&self.properties)
+    }
 }
 
 // impl<'a> Display for DataType<'a> {

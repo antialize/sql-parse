@@ -26,6 +26,16 @@ pub struct DropTable<'a> {
     pub tables: Vec<(&'a str, Span)>,
 }
 
+impl<'a> Spanned for DropTable<'a> {
+    fn span(&self) -> Span {
+        self.drop_span
+            .join_span(&self.temporary)
+            .join_span(&self.table_span)
+            .join_span(&self.if_exists)
+            .join_span(&self.tables)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DropView<'a> {
     pub drop_span: Span,
@@ -33,6 +43,16 @@ pub struct DropView<'a> {
     pub view_span: Span,
     pub if_exists: Option<Span>,
     pub views: Vec<(&'a str, Span)>,
+}
+
+impl<'a> Spanned for DropView<'a> {
+    fn span(&self) -> Span {
+        self.drop_span
+            .join_span(&self.temporary)
+            .join_span(&self.view_span)
+            .join_span(&self.if_exists)
+            .join_span(&self.views)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -43,12 +63,30 @@ pub struct DropDatabase<'a> {
     pub database: (&'a str, Span),
 }
 
+impl<'a> Spanned for DropDatabase<'a> {
+    fn span(&self) -> Span {
+        self.drop_span
+            .join_span(&self.database_span)
+            .join_span(&self.if_exists)
+            .join_span(&self.database)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DropEvent<'a> {
     pub drop_span: Span,
     pub event_span: Span,
     pub if_exists: Option<Span>,
     pub event: (&'a str, Span),
+}
+
+impl<'a> Spanned for DropEvent<'a> {
+    fn span(&self) -> Span {
+        self.drop_span
+            .join_span(&self.event_span)
+            .join_span(&self.if_exists)
+            .join_span(&self.event)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -59,12 +97,30 @@ pub struct DropFunction<'a> {
     pub function: (&'a str, Span),
 }
 
+impl<'a> Spanned for DropFunction<'a> {
+    fn span(&self) -> Span {
+        self.drop_span
+            .join_span(&self.function_span)
+            .join_span(&self.if_exists)
+            .join_span(&self.function)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DropProcedure<'a> {
     pub drop_span: Span,
     pub procedure_span: Span,
     pub if_exists: Option<Span>,
     pub procedure: (&'a str, Span),
+}
+
+impl<'a> Spanned for DropProcedure<'a> {
+    fn span(&self) -> Span {
+        self.drop_span
+            .join_span(&self.procedure_span)
+            .join_span(&self.if_exists)
+            .join_span(&self.procedure)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +131,15 @@ pub struct DropServer<'a> {
     pub server: (&'a str, Span),
 }
 
+impl<'a> Spanned for DropServer<'a> {
+    fn span(&self) -> Span {
+        self.drop_span
+            .join_span(&self.server_span)
+            .join_span(&self.if_exists)
+            .join_span(&self.server)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DropTrigger<'a> {
     pub drop_span: Span,
@@ -82,6 +147,16 @@ pub struct DropTrigger<'a> {
     pub if_exists: Option<Span>,
     pub schema: Option<(&'a str, Span)>,
     pub trigger: (&'a str, Span),
+}
+
+impl<'a> Spanned for DropTrigger<'a> {
+    fn span(&self) -> Span {
+        self.drop_span
+            .join_span(&self.trigger_span)
+            .join_span(&self.if_exists)
+            .join_span(&self.schema)
+            .join_span(&self.trigger)
+    }
 }
 
 pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, ParseError> {
