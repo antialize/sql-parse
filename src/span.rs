@@ -73,6 +73,12 @@ impl<T: OptSpanned> OptSpanned for Vec<T> {
     }
 }
 
+impl<T: OptSpanned> OptSpanned for [T] {
+    fn opt_span(&self) -> Option<Span> {
+        self.iter().fold(None, |a, b| a.opt_join_span(b))
+    }
+}
+
 impl<S: Spanned> Spanned for (usize, S) {
     fn span(&self) -> Span {
         self.1.span()

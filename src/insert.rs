@@ -44,6 +44,7 @@ pub struct Insert<'a> {
     pub flags: Vec<InsertFlag>,
     pub into_span: Option<Span>,
     pub table: Vec<(&'a str, Span)>,
+    pub columns: Vec<(&'a str, Span)>,
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
     pub select: Option<Select<'a>>,
 }
@@ -148,6 +149,7 @@ pub(crate) fn parse_insert<'a>(parser: &mut Parser<'a>) -> Result<Insert<'a>, Pa
         flags,
         insert_span,
         table,
+        columns,
         into_span,
         values,
         select,

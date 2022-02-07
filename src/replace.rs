@@ -40,6 +40,7 @@ pub struct Replace<'a> {
     pub flags: Vec<ReplaceFlag>,
     pub into_span: Option<Span>,
     pub table: Vec<(&'a str, Span)>,
+    pub columns: Vec<(&'a str, Span)>,
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
     pub select: Option<Select<'a>>,
 }
@@ -51,6 +52,7 @@ impl<'a> Spanned for Replace<'a> {
             .join_span(&self.into_span)
             .join_span(&self.table)
             .join_span(&self.values)
+            .join_span(&self.columns)
             .join_span(&self.select)
     }
 }
@@ -141,5 +143,6 @@ pub(crate) fn parse_replace<'a>(parser: &mut Parser<'a>) -> Result<Replace<'a>, 
         into_span,
         values,
         select,
+        columns,
     })
 }

@@ -72,6 +72,7 @@ pub enum Function<'a> {
     FromDays,
     Greatest,
     Hex,
+    If,
     IfNull,
     Insert,
     InStr,
@@ -125,12 +126,16 @@ pub enum Function<'a> {
     MakeDate,
     MakeSet,
     MakeTime,
+    Max,
     MicroSecond,
     Mid,
+    Min,
     Minute,
     MonthName,
     NaturalSortkey,
     Now,
+    NullIf,
+    NVL2,
     Oct,
     OctetLength,
     Ord,
@@ -164,6 +169,7 @@ pub enum Function<'a> {
     SubStr,
     SubStringIndex,
     SubTime,
+    Sum,
     Tan,
     Time,
     TimeDiff,
@@ -190,9 +196,6 @@ pub enum Function<'a> {
     Week,
     Weekday,
     WeekOfYear,
-    If,
-    NullIf,
-    NVL2,
     Other(&'a str),
 }
 
@@ -435,6 +438,9 @@ fn parse_function<'a>(
         // TODO uncat
         Token::Ident(_, Keyword::COUNT) => Function::Count,
         Token::Ident(_, Keyword::EXISTS) => Function::Exists,
+        Token::Ident(_, Keyword::MIN) => Function::Min,
+        Token::Ident(_, Keyword::MAX) => Function::Max,
+        Token::Ident(_, Keyword::SUM) => Function::Sum,
 
         //https://mariadb.com/kb/en/control-flow-functions/
         Token::Ident(_, Keyword::IFNULL) => Function::IfNull,
@@ -1061,16 +1067,10 @@ mod tests {
 
     fn test_ident<'a>(e: impl AsRef<Expression<'a>>, v: &str) -> Result<(), String> {
         let v = match e.as_ref() {
-            Expression::Identifier(a) => {
-                if a.len() != 1 {
-                    false
-                } else {
-                    match a.get(0) {
-                        Some(IdentifierPart::Name((vv, _))) => *vv == v,
-                        _ => false,
-                    }
-                }
-            }
+            Expression::Identifier(a) => match a.as_slice() {
+                [IdentifierPart::Name((vv, _))] => *vv == v,
+                _ => false,
+            },
             _ => false,
         };
         if !v {

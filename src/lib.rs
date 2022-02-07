@@ -31,8 +31,26 @@ mod update;
 pub use data_type::{DataType, DataTypeProperty, Type};
 pub use issue::{Issue, Level};
 pub use lexer::Lexer;
-pub use span::{Span, Spanned};
-pub use statement::Statement;
+pub use span::{OptSpanned, Span, Spanned};
+pub use statement::{Statement, Union, UnionType, UnionWith};
+
+pub use alter::{AlterSpecification, AlterTable};
+pub use create::{
+    CreateAlgorithm, CreateDefinition, CreateFunction, CreateOption, CreateTable, CreateTrigger,
+    CreateView, TableOption,
+};
+pub use delete::{Delete, DeleteFlag};
+pub use drop::{
+    DropDatabase, DropEvent, DropFunction, DropProcedure, DropServer, DropTable, DropTrigger,
+    DropView,
+};
+pub use expression::{
+    BinaryOperator, Expression, Function, IdentifierPart, Is, UnaryOperator, When,
+};
+pub use insert::{Insert, InsertFlag};
+pub use replace::{Replace, ReplaceFlag};
+pub use select::{JoinSpecification, JoinType, Select, SelectFlag, TableReference};
+pub use update::{Update, UpdateFlag};
 
 pub fn parse_statements(src: &str) -> (Vec<Statement<'_>>, Vec<Issue>) {
     let mut parser = Parser::new(src);
