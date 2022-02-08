@@ -13,13 +13,14 @@
 use crate::{Span, Spanned};
 
 /// Level of an issues
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Level {
     Warning,
     Error,
 }
 
 /// An issue encountered during parsing, or later stages
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Issue {
     pub level: Level,
     pub message: String,

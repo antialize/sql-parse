@@ -14,13 +14,17 @@ use crate::{Span, Spanned};
 
 #[derive(Clone, Debug)]
 pub struct Identifier<'a> {
-    value: &'a str,
-    span: Span,
+    pub value: &'a str,
+    pub span: Span,
 }
 
 impl<'a> Identifier<'a> {
     pub fn new(value: &'a str, span: Span) -> Self {
         Identifier { value, span }
+    }
+
+    pub fn as_str(&self) -> &'a str{
+        self.value
     }
 }
 

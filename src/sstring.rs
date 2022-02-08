@@ -16,8 +16,8 @@ use crate::{Span, Spanned};
 
 #[derive(Clone, Debug)]
 pub struct SString<'a> {
-    value: Cow<'a, str>,
-    span: Span,
+    pub value: Cow<'a, str>,
+    pub span: Span,
 }
 
 impl<'a> SString<'a> {
@@ -39,3 +39,5 @@ impl<'a> Spanned for SString<'a> {
         self.span.span()
     }
 }
+
+
