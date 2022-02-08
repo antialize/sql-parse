@@ -14,7 +14,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Span, Spanned, Statement,
+    Identifier, Span, Spanned, Statement,
 };
 
 #[derive(Debug, Clone)]
@@ -23,7 +23,7 @@ pub struct DropTable<'a> {
     pub temporary: Option<Span>,
     pub table_span: Span,
     pub if_exists: Option<Span>,
-    pub tables: Vec<(&'a str, Span)>,
+    pub tables: Vec<Identifier<'a>>,
 }
 
 impl<'a> Spanned for DropTable<'a> {
@@ -42,7 +42,7 @@ pub struct DropView<'a> {
     pub temporary: Option<Span>,
     pub view_span: Span,
     pub if_exists: Option<Span>,
-    pub views: Vec<(&'a str, Span)>,
+    pub views: Vec<Identifier<'a>>,
 }
 
 impl<'a> Spanned for DropView<'a> {
@@ -60,7 +60,7 @@ pub struct DropDatabase<'a> {
     pub drop_span: Span,
     pub database_span: Span,
     pub if_exists: Option<Span>,
-    pub database: (&'a str, Span),
+    pub database: Identifier<'a>,
 }
 
 impl<'a> Spanned for DropDatabase<'a> {
@@ -77,7 +77,7 @@ pub struct DropEvent<'a> {
     pub drop_span: Span,
     pub event_span: Span,
     pub if_exists: Option<Span>,
-    pub event: (&'a str, Span),
+    pub event: Identifier<'a>,
 }
 
 impl<'a> Spanned for DropEvent<'a> {
@@ -94,7 +94,7 @@ pub struct DropFunction<'a> {
     pub drop_span: Span,
     pub function_span: Span,
     pub if_exists: Option<Span>,
-    pub function: (&'a str, Span),
+    pub function: Identifier<'a>,
 }
 
 impl<'a> Spanned for DropFunction<'a> {
@@ -111,7 +111,7 @@ pub struct DropProcedure<'a> {
     pub drop_span: Span,
     pub procedure_span: Span,
     pub if_exists: Option<Span>,
-    pub procedure: (&'a str, Span),
+    pub procedure: Identifier<'a>,
 }
 
 impl<'a> Spanned for DropProcedure<'a> {
@@ -128,7 +128,7 @@ pub struct DropServer<'a> {
     pub drop_span: Span,
     pub server_span: Span,
     pub if_exists: Option<Span>,
-    pub server: (&'a str, Span),
+    pub server: Identifier<'a>,
 }
 
 impl<'a> Spanned for DropServer<'a> {
@@ -145,8 +145,8 @@ pub struct DropTrigger<'a> {
     pub drop_span: Span,
     pub trigger_span: Span,
     pub if_exists: Option<Span>,
-    pub schema: Option<(&'a str, Span)>,
-    pub trigger: (&'a str, Span),
+    pub schema: Option<Identifier<'a>>,
+    pub trigger: Identifier<'a>,
 }
 
 impl<'a> Spanned for DropTrigger<'a> {
@@ -159,7 +159,7 @@ impl<'a> Spanned for DropTrigger<'a> {
     }
 }
 
-pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, ParseError> {
+pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statement<'a>, ParseError> {
     let drop_span = parser.consume_keyword(Keyword::DROP)?;
     let temporary = parser.skip_keyword(Keyword::TEMPORARY);
     match &parser.token {
@@ -236,7 +236,7 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, P
         }
         Token::Ident(_, Keyword::INDEX) => {
             // DROP INDEX [IF EXISTS] index_name ON tbl_name
-            parser.error("Not implemented")
+            parser.todo(file!(), line!())
         }
         Token::Ident(_, Keyword::PROCEDURE) => {
             // TODO complain about temporary
@@ -256,7 +256,7 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, P
         }
         Token::Ident(_, Keyword::SEQUENCE) => {
             // DROP [TEMPORARY] SEQUENCE [IF EXISTS] [/*COMMENT TO SAVE*/] sequence_name [, sequence_name] ...
-            parser.error("Not implemented")
+            parser.todo(file!(), line!())
         }
         Token::Ident(_, Keyword::SERVER) => {
             // TODO complain about temporary
@@ -320,7 +320,7 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, P
         }
         Token::Ident(_, Keyword::USER) => {
             // DROP USER [IF EXISTS] user_name [, user_name] ..
-            parser.error("Not implemented")
+            parser.todo(file!(), line!())
         }
         _ => parser.expected_failure("droppable"),
     }

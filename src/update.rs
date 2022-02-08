@@ -17,7 +17,7 @@ use crate::{
     parser::{ParseError, Parser},
     select::{parse_table_reference, TableReference},
     span::OptSpanned,
-    Span, Spanned,
+    Identifier, Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
@@ -41,7 +41,7 @@ pub struct Update<'a> {
     pub flags: Vec<UpdateFlag>,
     pub tables: Vec<TableReference<'a>>,
     pub set_span: Span,
-    pub set: Vec<(Vec<(&'a str, Span)>, Expression<'a>)>,
+    pub set: Vec<(Vec<Identifier<'a>>, Expression<'a>)>,
     pub where_: Option<(Expression<'a>, Span)>,
 }
 
@@ -61,7 +61,7 @@ impl<'a> Spanned for Update<'a> {
     }
 }
 
-pub(crate) fn parse_update<'a>(parser: &mut Parser<'a>) -> Result<Update<'a>, ParseError> {
+pub(crate) fn parse_update<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Update<'a>, ParseError> {
     let update_span = parser.consume_keyword(Keyword::UPDATE)?;
     let mut flags = Vec::new();
 

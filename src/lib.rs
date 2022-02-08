@@ -17,6 +17,7 @@ mod data_type;
 mod delete;
 mod drop;
 mod expression;
+mod identifier;
 mod insert;
 mod issue;
 mod keywords;
@@ -25,13 +26,16 @@ mod parser;
 mod replace;
 mod select;
 mod span;
+mod sstring;
 mod statement;
 mod update;
 
 pub use data_type::{DataType, DataTypeProperty, Type};
+pub use identifier::Identifier;
 pub use issue::{Issue, Level};
 pub use lexer::Lexer;
 pub use span::{OptSpanned, Span, Spanned};
+pub use sstring::SString;
 pub use statement::{Statement, Union, UnionType, UnionWith};
 
 pub use alter::{AlterSpecification, AlterTable};
@@ -52,62 +56,118 @@ pub use replace::{Replace, ReplaceFlag};
 pub use select::{JoinSpecification, JoinType, Select, SelectFlag, TableReference};
 pub use update::{Update, UpdateFlag};
 
-pub fn parse_statements(src: &str) -> (Vec<Statement<'_>>, Vec<Issue>) {
-    let mut parser = Parser::new(src);
-    let statements = statement::parse_statements(&mut parser);
-    (statements, parser.issues)
+/// What sql diarect to parse as
+#[derive(Clone, Debug)]
+pub enum SQLDialect {
+    /// Parse MariaDB/Mysql SQL
+    MariaDB,
 }
 
-// pub fn parse_statement(src: &str) -> (Option<Statement<'_>>, Vec<Issue>) {
-//     let mut parser = Parser::new(src);
-//     let statements = statement::parse_statement(&mut parser);
-//     (statements.ok(), parser.issues)
-// }
+/// What kinds or arguments
+#[derive(Clone, Debug)]
+pub enum SQLArguments {
+    /// The statements do not contain arguments
+    None,
+    /// Arguments are %s or %d
+    Percent,
+    /// Arguments are ?
+    QuestionMark,
+}
 
-#[cfg(test)]
-mod tests {
+/// Options used when parsing xml
+#[derive(Clone, Debug)]
+pub struct ParseOptions {
+    dialect: SQLDialect,
+    arguments: SQLArguments,
+    warn_unqouted_identifiers: bool,
+    warn_none_capital_keywords: bool,
+}
 
-    use codespan_reporting::{
-        diagnostic::{Diagnostic, Label},
-        files::SimpleFiles,
-        term::{
-            self,
-            termcolor::{ColorChoice, StandardStream},
-        },
-    };
-
-    use crate::{issue::Level, parser::Parser, statement::parse_statements};
-
-    #[test]
-    fn it_works() {
-        let src = std::fs::read_to_string("qs2.sql").expect("Failed to read file");
-        //let src = "int (22) null signed unsigned signed,";
-        let mut parser = Parser::new(&src);
-
-        let statements = parse_statements(&mut parser);
-
-        //let dt = parse_data_type(&mut parser);
-        println!("{:#?}", parser.issues.len());
-
-        if !parser.issues.is_empty() {
-            let mut files = SimpleFiles::new();
-            let file_id = files.add("qs2.sql", &src);
-            let writer = StandardStream::stderr(ColorChoice::Always);
-            let config = codespan_reporting::term::Config::default();
-            for issue in parser.issues {
-                let mut labels = vec![Label::primary(file_id, issue.span)];
-                for (message, span) in issue.fragments {
-                    labels.push(Label::secondary(file_id, span).with_message(message));
-                }
-                let d = match issue.level {
-                    Level::Error => Diagnostic::error(),
-                    Level::Warning => Diagnostic::warning(),
-                };
-                let d = d.with_message(issue.message).with_labels(labels);
-                term::emit(&mut writer.lock(), &config, &files, &d).unwrap();
-            }
-            panic!("HERE");
+impl Default for ParseOptions {
+    fn default() -> Self {
+        Self {
+            dialect: SQLDialect::MariaDB,
+            arguments: SQLArguments::None,
+            warn_none_capital_keywords: false,
+            warn_unqouted_identifiers: false,
         }
-        panic!();
     }
+}
+
+impl ParseOptions {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Change whan SQL dialect to use
+    pub fn dialect(self, dialect: SQLDialect) -> Self {
+        Self { dialect, ..self }
+    }
+
+    /// Change what kinds of arguments are supplied
+    pub fn arguments(self, arguments: SQLArguments) -> Self {
+        Self { arguments, ..self }
+    }
+
+    /// Should we warn about unqueted identifiers
+    pub fn warn_unqouted_identifiers(self, warn_unqouted_identifiers: bool) -> Self {
+        Self {
+            warn_unqouted_identifiers,
+            ..self
+        }
+    }
+
+    /// Should we warn about unqueted identifiers
+    pub fn warn_none_capital_keywords(self, warn_none_capital_keywords: bool) -> Self {
+        Self {
+            warn_none_capital_keywords,
+            ..self
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! issue_ice {
+    ( $spanned:expr ) => {
+        {
+            Issue::err(
+                format!("Internal compiler error in {}:{}", file!(), line!),
+                $spanned
+            )
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! issue_todo {
+    ( $spanned:expr ) => {
+        {
+            Issue::err(
+                format!("Not yet implemented {}:{}", file!(), line!),
+                $spanned
+            )
+        }
+    };
+}
+
+/// Parse multiple statements,
+/// return an vec of Statements even if there are parse errors.
+pub fn parse_statements<'a>(
+    src: &'a str,
+    issues: &mut Vec<Issue>,
+    options: &ParseOptions,
+) -> Vec<Statement<'a>> {
+    let mut parser = Parser::new(src, issues, options);
+    statement::parse_statements(&mut parser)
+}
+
+/// Parse a single statement,
+/// A statement may be returned even if there where parse errors.
+pub fn parse_statement<'a>(
+    src: &'a str,
+    issues: &mut Vec<Issue>,
+    options: &ParseOptions,
+) -> Option<Statement<'a>> {
+    let mut parser = Parser::new(src, issues, options);
+    statement::parse_statement(&mut parser).unwrap_or_default()
 }

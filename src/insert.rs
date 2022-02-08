@@ -16,7 +16,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
-    Span, Spanned,
+    Identifier, Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
@@ -43,8 +43,8 @@ pub struct Insert<'a> {
     pub insert_span: Span,
     pub flags: Vec<InsertFlag>,
     pub into_span: Option<Span>,
-    pub table: Vec<(&'a str, Span)>,
-    pub columns: Vec<(&'a str, Span)>,
+    pub table: Vec<Identifier<'a>>,
+    pub columns: Vec<Identifier<'a>>,
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
     pub select: Option<Select<'a>>,
 }
@@ -60,7 +60,7 @@ impl<'a> Spanned for Insert<'a> {
     }
 }
 
-pub(crate) fn parse_insert<'a>(parser: &mut Parser<'a>) -> Result<Insert<'a>, ParseError> {
+pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert<'a>, ParseError> {
     let insert_span = parser.consume_keyword(Keyword::INSERT)?;
     let mut flags = Vec::new();
 

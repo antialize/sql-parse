@@ -27,13 +27,13 @@ use crate::{
     select::{parse_select, OrderFlag, Select},
     span::OptSpanned,
     update::{parse_update, Update},
-    Level, Span, Spanned,
+    Identifier, Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
 pub struct Set<'a> {
     pub set_span: Span,
-    pub values: Vec<((&'a str, Span), Expression<'a>)>,
+    pub values: Vec<(Identifier<'a>, Expression<'a>)>,
 }
 
 impl<'a> Spanned for Set<'a> {
@@ -42,7 +42,7 @@ impl<'a> Spanned for Set<'a> {
     }
 }
 
-fn parse_set<'a>(parser: &mut Parser<'a>) -> Result<Set<'a>, ParseError> {
+fn parse_set<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Set<'a>, ParseError> {
     let set_span = parser.consume_keyword(Keyword::SET)?;
     let mut values = Vec::new();
     loop {
@@ -57,8 +57,8 @@ fn parse_set<'a>(parser: &mut Parser<'a>) -> Result<Set<'a>, ParseError> {
     Ok(Set { set_span, values })
 }
 
-fn parse_statement_list_inner<'a>(
-    parser: &mut Parser<'a>,
+fn parse_statement_list_inner<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     out: &mut Vec<Statement<'a>>,
 ) -> Result<(), ParseError> {
     loop {
@@ -74,8 +74,8 @@ fn parse_statement_list_inner<'a>(
     Ok(())
 }
 
-fn parse_statement_list<'a>(
-    parser: &mut Parser<'a>,
+fn parse_statement_list<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     out: &mut Vec<Statement<'a>>,
 ) -> Result<(), ParseError> {
     let old_delimiter = std::mem::replace(&mut parser.delimiter, Token::SemiColon);
@@ -84,7 +84,7 @@ fn parse_statement_list<'a>(
     r
 }
 
-fn parse_block<'a>(parser: &mut Parser<'a>) -> Result<Vec<Statement<'a>>, ParseError> {
+fn parse_block<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<Statement<'a>>, ParseError> {
     parser.consume_keyword(Keyword::BEGIN)?;
     let mut ans = Vec::new();
     parser.recovered(
@@ -131,7 +131,7 @@ impl<'a> Spanned for If<'a> {
     }
 }
 
-fn parse_if<'a>(parser: &mut Parser<'a>) -> Result<If<'a>, ParseError> {
+fn parse_if<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<If<'a>, ParseError> {
     let if_span = parser.consume_keyword(Keyword::IF)?;
     let mut conditions = Vec::new();
     let mut else_ = None;
@@ -243,8 +243,8 @@ impl<'a> Spanned for Statement<'a> {
     }
 }
 
-pub(crate) fn parse_statement<'a>(
-    parser: &mut Parser<'a>,
+pub(crate) fn parse_statement<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
 ) -> Result<Option<Statement<'a>>, ParseError> {
     Ok(match &parser.token {
         Token::Ident(_, Keyword::CREATE) => Some(parse_create(parser)?),
@@ -299,8 +299,8 @@ impl<'a> Spanned for CaseStatement<'a> {
     }
 }
 
-pub(crate) fn parse_case_statement<'a>(
-    parser: &mut Parser<'a>,
+pub(crate) fn parse_case_statement<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
 ) -> Result<CaseStatement<'a>, ParseError> {
     let case_span = parser.consume_keyword(Keyword::CASE)?;
     let value = Box::new(parse_expression(parser, false)?);
@@ -344,8 +344,8 @@ pub(crate) fn parse_case_statement<'a>(
     })
 }
 
-pub(crate) fn parse_compound_query_bottom<'a>(
-    parser: &mut Parser<'a>,
+pub(crate) fn parse_compound_query_bottom<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
 ) -> Result<Statement<'a>, ParseError> {
     match &parser.token {
         Token::LParen => {
@@ -410,8 +410,8 @@ impl<'a> Spanned for Union<'a> {
     }
 }
 
-pub(crate) fn parse_compound_query<'a>(
-    parser: &mut Parser<'a>,
+pub(crate) fn parse_compound_query<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
 ) -> Result<Statement<'a>, ParseError> {
     let q = parse_compound_query_bottom(parser)?;
     if !matches!(parser.token, Token::Ident(_, Keyword::UNION)) {
@@ -483,7 +483,7 @@ pub(crate) fn parse_compound_query<'a>(
     }))
 }
 
-pub(crate) fn parse_statements<'a>(parser: &mut Parser<'a>) -> Vec<Statement<'a>> {
+pub(crate) fn parse_statements<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Vec<Statement<'a>> {
     let mut ans = Vec::new();
     loop {
         loop {
@@ -500,12 +500,9 @@ pub(crate) fn parse_statements<'a>(parser: &mut Parser<'a>) -> Vec<Statement<'a>
             let t = parser.token.clone();
 
             if !matches!(t, Token::DoubleDollar | Token::SemiColon) {
-                parser.issues.push(crate::Issue {
-                    level: Level::Warning,
-                    message: "Unknown delimiter".to_string(),
-                    span: parser.span.clone(),
-                    fragments: Vec::new(),
-                });
+                parser
+                    .issues
+                    .push(crate::Issue::warn("Unknown delimiter", &parser.span));
             }
             parser.delimiter = t;
             parser.next();

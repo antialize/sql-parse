@@ -13,10 +13,10 @@
 use std::{borrow::Cow, fmt::Write};
 
 use crate::{
-    issue::{Issue, Level},
+    issue::Issue,
     keywords::Keyword,
     lexer::{Lexer, Token},
-    Span, Spanned,
+    Identifier, ParseOptions, SString, Span, Spanned,
 };
 
 #[derive(Debug)]
@@ -24,13 +24,14 @@ pub(crate) enum ParseError {
     Unrecovered,
 }
 
-pub(crate) struct Parser<'a> {
+pub(crate) struct Parser<'a, 'b> {
     pub(crate) token: Token<'a>,
     pub(crate) span: Span,
     pub(crate) lexer: Lexer<'a>,
-    pub(crate) issues: Vec<Issue>,
+    pub(crate) issues: &'b mut Vec<Issue>,
     pub(crate) arg: usize,
     pub(crate) delimiter: Token<'a>,
+    pub(crate) options: &'b ParseOptions,
 }
 
 pub(crate) fn decode_single_quoted_string(s: &str) -> Cow<'_, str> {
@@ -88,17 +89,18 @@ impl<'a> std::fmt::Display for SingleQuotedString<'a> {
     }
 }
 
-impl<'a> Parser<'a> {
-    pub(crate) fn new(src: &'a str) -> Self {
+impl<'a, 'b> Parser<'a, 'b> {
+    pub(crate) fn new(src: &'a str, issues: &'b mut Vec<Issue>, options: &'b ParseOptions) -> Self {
         let mut lexer = Lexer::new(src);
         let (token, span) = lexer.next_token();
         Self {
             token,
             span,
             lexer,
-            issues: Vec::new(),
+            issues,
             arg: 0,
             delimiter: Token::SemiColon,
+            options,
         }
     }
 
@@ -182,12 +184,8 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn expected_error(&mut self, name: &'static str) {
-        self.issues.push(Issue {
-            level: Level::Error,
-            message: format!("Expected '{}' here", name),
-            span: self.span.clone(),
-            fragments: Vec::new(),
-        });
+        self.issues
+            .push(Issue::err(format!("Expected '{}' here", name), &self.span));
     }
 
     pub(crate) fn expected_failure<T>(&mut self, name: &'static str) -> Result<T, ParseError> {
@@ -199,53 +197,47 @@ impl<'a> Parser<'a> {
         &mut self,
         token: &Token<'a>,
         span: Span,
-    ) -> Result<(&'a str, Span), ParseError> {
+    ) -> Result<Identifier<'a>, ParseError> {
         match &token {
             Token::Ident(v, kw) => {
                 let v = *v;
                 if kw.reserved() {
-                    self.issues.push(Issue {
-                        level: Level::Error,
-                        message: format!("'{}' is a reserved identifier use `{}`", v, v),
-                        span: span.clone(),
-                        fragments: Vec::new(),
-                    });
+                    self.issues.push(Issue::err(
+                        format!("'{}' is a reserved identifier use `{}`", v, v),
+                        &span,
+                    ));
+                } else if kw != &Keyword::QUOTED_IDENTIFIER
+                    && self.options.warn_unqouted_identifiers
+                {
+                    self.issues.push(Issue::warn(
+                        format!("identifiers should be quoted as `{}`", v),
+                        &span,
+                    ));
                 }
-                if kw == &Keyword::NOT_A_KEYWORD {
-                    // self.issues.push(Issue{
-                    //     level: Level::Warning,
-                    //     message: format!("identifiers should be quoted as `{}`", v),
-                    //     span: self.span.clone(),
-                    //     fragments: Vec::new(),
-                    // })
-                }
-                Ok((v, span))
+                Ok(Identifier::new(v, span))
             }
             _ => self.expected_failure("identifier"),
         }
     }
 
-    pub(crate) fn consume_plain_identifier(&mut self) -> Result<(&'a str, Span), ParseError> {
+    pub(crate) fn consume_plain_identifier(&mut self) -> Result<Identifier<'a>, ParseError> {
         match &self.token {
             Token::Ident(v, kw) => {
                 let v = *v;
                 if kw.reserved() {
-                    self.issues.push(Issue {
-                        level: Level::Error,
-                        message: format!("'{}' is a reserved identifier use `{}`", v, v),
-                        span: self.span.clone(),
-                        fragments: Vec::new(),
-                    });
+                    self.issues.push(Issue::err(
+                        format!("'{}' is a reserved identifier use `{}`", v, v),
+                        &self.span,
+                    ));
+                } else if kw != &Keyword::QUOTED_IDENTIFIER
+                    && self.options.warn_unqouted_identifiers
+                {
+                    self.issues.push(Issue::warn(
+                        format!("identifiers should be quoted as `{}`", v),
+                        &self.span,
+                    ));
                 }
-                if kw == &Keyword::NOT_A_KEYWORD {
-                    // self.issues.push(Issue{
-                    //     level: Level::Warning,
-                    //     message: format!("identifiers should be quoted as `{}`", v),
-                    //     span: self.span.clone(),
-                    //     fragments: Vec::new(),
-                    // })
-                }
-                Ok((v, self.consume()))
+                Ok(Identifier::new(v, self.consume()))
             }
             _ => self.expected_failure("identifier"),
         }
@@ -254,15 +246,17 @@ impl<'a> Parser<'a> {
     pub(crate) fn consume_keyword(&mut self, keyword: Keyword) -> Result<Span, ParseError> {
         match &self.token {
             Token::Ident(v, kw) if kw == &keyword => {
-                if !v.chars().all(|c| c.is_ascii_uppercase()) {
-                    // self.issues.push(
-                    //     Issue{
-                    //         level: Level::Warning,
-                    //         message: format!("keyword {} should be in ALL CAPS {}", v, v.to_ascii_uppercase()),
-                    //         span: self.span.clone(),
-                    //         fragments: Vec::new(),
-                    //     }
-                    // );
+                if !v.chars().all(|c| c.is_ascii_uppercase())
+                    && self.options.warn_none_capital_keywords
+                {
+                    self.issues.push(Issue::warn(
+                        format!(
+                            "keyword {} should be in ALL CAPS {}",
+                            v,
+                            v.to_ascii_uppercase()
+                        ),
+                        &self.span,
+                    ));
                 }
                 Ok(self.consume())
             }
@@ -307,7 +301,7 @@ impl<'a> Parser<'a> {
         span
     }
 
-    pub(crate) fn consume_string(&mut self) -> Result<(Cow<'a, str>, Span), ParseError> {
+    pub(crate) fn consume_string(&mut self) -> Result<SString<'a>, ParseError> {
         let (mut a, mut b) = match &self.token {
             Token::SingleQuotedString(v) => {
                 let v = *v;
@@ -338,7 +332,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             }
         }
-        Ok((a, b))
+        Ok(SString::new(a, b))
     }
 
     pub(crate) fn consume_int<T: std::str::FromStr + Default>(
@@ -376,12 +370,15 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn error<T>(&mut self, message: impl Into<String>) -> Result<T, ParseError> {
-        self.issues.push(Issue {
-            level: Level::Error,
-            message: message.into(),
-            span: self.span.clone(),
-            fragments: Vec::new(),
-        });
+        self.issues.push(Issue::err(message, &self.span));
         Err(ParseError::Unrecovered)
+    }
+
+    pub(crate) fn ice<T>(&mut self, file: &'static str, line: u32) -> Result<T, ParseError> {
+        self.error(format!("Internal compiler error at {}:{}", file, line))
+    }
+
+    pub(crate) fn todo<T>(&mut self, file: &'static str, line: u32) -> Result<T, ParseError> {
+        self.error(format!("Not yet implemented at {}:{}", file, line))
     }
 }

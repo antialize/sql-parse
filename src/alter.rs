@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,7 +14,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    DataType, Span, Spanned, Statement,
+    DataType, Identifier, SString, Span, Spanned, Statement,
 };
 
 #[derive(Clone, Debug)]
@@ -24,7 +22,7 @@ pub enum IndexOption<'a> {
     IndexTypeBTree(Span),
     IndexTypeHash(Span),
     IndexTypeRTree(Span),
-    Comment((Cow<'a, str>, Span)),
+    Comment(SString<'a>),
 }
 
 impl<'a> Spanned for IndexOption<'a> {
@@ -109,7 +107,7 @@ impl Spanned for ForeginKeyOn {
 
 #[derive(Clone, Debug)]
 pub struct IndexCol<'a> {
-    pub name: (&'a str, Span),
+    pub name: Identifier<'a>,
     pub size: Option<(u32, Span)>,
 }
 
@@ -125,27 +123,27 @@ pub enum AlterSpecification<'a> {
         add_span: Span,
         index_type: IndexType,
         if_not_exists: Option<Span>,
-        name: Option<(&'a str, Span)>,
-        constraint: Option<(Span, Option<(&'a str, Span)>)>,
+        name: Option<Identifier<'a>>,
+        constraint: Option<(Span, Option<Identifier<'a>>)>,
         cols: Vec<IndexCol<'a>>,
         index_options: Vec<IndexOption<'a>>,
     },
     AddForeginKey {
         add_span: Span,
-        constraint: Option<(Span, Option<(&'a str, Span)>)>,
+        constraint: Option<(Span, Option<Identifier<'a>>)>,
         foregin_key_span: Span,
         if_not_exists: Option<Span>,
-        name: Option<(&'a str, Span)>,
+        name: Option<Identifier<'a>>,
         cols: Vec<IndexCol<'a>>,
         references_span: Span,
-        references_table: (&'a str, Span),
-        references_cols: Vec<(&'a str, Span)>,
+        references_table: Identifier<'a>,
+        references_cols: Vec<Identifier<'a>>,
         ons: Vec<ForeginKeyOn>,
     },
     Modify {
         modify_span: Span,
         if_exists: Option<Span>,
-        col: (&'a str, Span),
+        col: Identifier<'a>,
         definition: DataType<'a>,
     },
 }
@@ -202,8 +200,8 @@ impl<'a> Spanned for AlterSpecification<'a> {
     }
 }
 
-fn parse_index_type<'a>(
-    parser: &mut Parser<'a>,
+fn parse_index_type<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     out: &mut Vec<IndexOption<'a>>,
 ) -> Result<(), ParseError> {
     parser.consume_keyword(Keyword::USING)?;
@@ -222,8 +220,8 @@ fn parse_index_type<'a>(
     Ok(())
 }
 
-fn parse_index_options<'a>(
-    parser: &mut Parser<'a>,
+fn parse_index_options<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     out: &mut Vec<IndexOption<'a>>,
 ) -> Result<(), ParseError> {
     loop {
@@ -239,7 +237,7 @@ fn parse_index_options<'a>(
     Ok(())
 }
 
-fn parse_index_cols<'a>(parser: &mut Parser<'a>) -> Result<Vec<IndexCol<'a>>, ParseError> {
+fn parse_index_cols<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<IndexCol<'a>>, ParseError> {
     parser.consume_token(Token::LParen)?;
     let mut ans = Vec::new();
     parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
@@ -268,7 +266,7 @@ fn parse_index_cols<'a>(parser: &mut Parser<'a>) -> Result<Vec<IndexCol<'a>>, Pa
     Ok(ans)
 }
 
-fn parse_cols<'a>(parser: &mut Parser<'a>) -> Result<Vec<(&'a str, Span)>, ParseError> {
+fn parse_cols<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<Identifier<'a>>, ParseError> {
     parser.consume_token(Token::LParen)?;
     let mut ans = Vec::new();
     parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
@@ -284,8 +282,8 @@ fn parse_cols<'a>(parser: &mut Parser<'a>) -> Result<Vec<(&'a str, Span)>, Parse
     Ok(ans)
 }
 
-fn parse_add_alter_specification<'a>(
-    parser: &mut Parser<'a>,
+fn parse_add_alter_specification<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
 ) -> Result<AlterSpecification<'a>, ParseError> {
     let add_span = parser.consume_keyword(Keyword::ADD)?;
     let constraint = if let Some(span) = parser.skip_keyword(Keyword::CONSTRAINT) {
@@ -415,7 +413,7 @@ fn parse_add_alter_specification<'a>(
                         _ => parser.expected_failure("'KEY' or 'INDEX'")?,
                     }
                 }
-                _ => parser.error("ICE")?,
+                _ => parser.ice(file!(), line!())?,
             };
 
             let if_not_exists = if let Some(s) = parser.skip_keyword(Keyword::IF) {
@@ -461,7 +459,7 @@ pub struct AlterTable<'a> {
     pub ignore: Option<Span>,
     pub table_span: Span,
     pub if_exists: Option<Span>,
-    pub table: (&'a str, Span),
+    pub table: Identifier<'a>,
     pub alter_specifications: Vec<AlterSpecification<'a>>,
 }
 
@@ -477,8 +475,8 @@ impl<'a> Spanned for AlterTable<'a> {
     }
 }
 
-fn parse_alter_table<'a>(
-    parser: &mut Parser<'a>,
+fn parse_alter_table<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     alter_span: Span,
     online: Option<Span>,
     ignore: Option<Span>,
@@ -535,7 +533,9 @@ fn parse_alter_table<'a>(
     })
 }
 
-pub(crate) fn parse_alter<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, ParseError> {
+pub(crate) fn parse_alter<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<Statement<'a>, ParseError> {
     let alter_span = parser.consume_keyword(Keyword::ALTER)?;
 
     let online = parser.skip_keyword(Keyword::ONLINE);

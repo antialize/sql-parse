@@ -17,13 +17,13 @@ use crate::{
     parser::{ParseError, Parser},
     span::OptSpanned,
     statement::parse_compound_query,
-    Span, Spanned, Statement,
+    Identifier, Span, Spanned, Statement,
 };
 
 #[derive(Debug, Clone)]
 pub struct SelectExpr<'a> {
     pub expr: Expression<'a>,
-    pub as_: Option<(&'a str, Span)>,
+    pub as_: Option<Identifier<'a>>,
 }
 
 impl<'a> Spanned for SelectExpr<'a> {
@@ -32,7 +32,9 @@ impl<'a> Spanned for SelectExpr<'a> {
     }
 }
 
-pub(crate) fn parse_select_expr<'a>(parser: &mut Parser<'a>) -> Result<SelectExpr<'a>, ParseError> {
+pub(crate) fn parse_select_expr<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<SelectExpr<'a>, ParseError> {
     let expr = parse_expression(parser, false)?;
     let as_ = if parser.skip_keyword(Keyword::AS).is_some() {
         Some(parser.consume_plain_identifier()?)
@@ -45,7 +47,7 @@ pub(crate) fn parse_select_expr<'a>(parser: &mut Parser<'a>) -> Result<SelectExp
 #[derive(Debug, Clone)]
 pub enum JoinSpecification<'a> {
     On(Expression<'a>, Span),
-    Using(Vec<(&'a str, Span)>, Span),
+    Using(Vec<Identifier<'a>>, Span),
 }
 
 impl<'a> Spanned for JoinSpecification<'a> {
@@ -98,14 +100,14 @@ impl Spanned for JoinType {
 #[derive(Debug, Clone)]
 pub enum TableReference<'a> {
     Table {
-        identifier: Vec<(&'a str, Span)>,
+        identifier: Vec<Identifier<'a>>,
         as_span: Option<Span>,
-        as_: Option<(&'a str, Span)>,
+        as_: Option<Identifier<'a>>,
     },
     Query {
         query: Box<Statement<'a>>,
         as_span: Option<Span>,
-        as_: Option<(&'a str, Span)>,
+        as_: Option<Identifier<'a>>,
         //TODO collist
     },
     Join {
@@ -145,8 +147,8 @@ impl<'a> Spanned for TableReference<'a> {
     }
 }
 
-pub(crate) fn parse_table_reference_inner<'a>(
-    parser: &mut Parser<'a>,
+pub(crate) fn parse_table_reference_inner<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
 ) -> Result<TableReference<'a>, ParseError> {
     // TODO [LATERAL] table_subquery [AS] alias [(col_list)]
     // if parser.skip_token(Token::LParen).is_some() {
@@ -215,8 +217,8 @@ pub(crate) fn parse_table_reference_inner<'a>(
     }
 }
 
-pub(crate) fn parse_table_reference<'a>(
-    parser: &mut Parser<'a>,
+pub(crate) fn parse_table_reference<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
 ) -> Result<TableReference<'a>, ParseError> {
     let mut ans = parse_table_reference_inner(parser)?;
     loop {
@@ -412,7 +414,7 @@ impl<'a> Spanned for Select<'a> {
     }
 }
 
-pub(crate) fn parse_select<'a>(parser: &mut Parser<'a>) -> Result<Select<'a>, ParseError> {
+pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select<'a>, ParseError> {
     let select_span = parser.consume_keyword(Keyword::SELECT)?;
     let mut flags = Vec::new();
     let mut select_exprs = Vec::new();

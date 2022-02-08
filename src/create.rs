@@ -1,37 +1,45 @@
-use std::borrow::Cow;
-
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 use crate::{
     data_type::parse_data_type,
-    expression::{parse_expression, Expression},
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
     statement::parse_statement,
-    DataType, Span, Spanned, Statement,
+    DataType, Identifier, SString, Span, Spanned, Statement,
 };
 
 #[derive(Clone, Debug)]
 pub enum TableOption<'a> {
     AutoExtendSize {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     AutoIncrement {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     AvgRowLength {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     CharSet {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     DefaultCharSet {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     Checksum {
         identifier: Span,
@@ -39,31 +47,31 @@ pub enum TableOption<'a> {
     },
     Collate {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     DefaultCollate {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     Comment {
         identifier: Span,
-        value: (Cow<'a, str>, Span),
+        value: SString<'a>,
     },
     Compression {
         identifier: Span,
-        value: (Cow<'a, str>, Span),
+        value: SString<'a>,
     },
     Connection {
         identifier: Span,
-        value: (Cow<'a, str>, Span),
+        value: SString<'a>,
     },
     DataDirectory {
         identifier: Span,
-        value: (Cow<'a, str>, Span),
+        value: SString<'a>,
     },
     IndexDirectory {
         identifier: Span,
-        value: (Cow<'a, str>, Span),
+        value: SString<'a>,
     },
     DelayKeyWrite {
         identifier: Span,
@@ -75,15 +83,15 @@ pub enum TableOption<'a> {
     },
     Engine {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     EngineAttribute {
         identifier: Span,
-        value: (Cow<'a, str>, Span),
+        value: SString<'a>,
     },
     InsertMethod {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     KeyBlockSize {
         identifier: Span,
@@ -100,15 +108,15 @@ pub enum TableOption<'a> {
     // PACK_KEYS
     Password {
         identifier: Span,
-        value: (Cow<'a, str>, Span),
+        value: SString<'a>,
     },
     RowFormat {
         identifier: Span,
-        value: (&'a str, Span),
+        value: Identifier<'a>,
     },
     SecondaryEngineAttribute {
         identifier: Span,
-        value: (Cow<'a, str>, Span),
+        value: SString<'a>,
     },
     //StatsAutoRecalc
     //StatsPersistance
@@ -155,7 +163,7 @@ impl<'a> Spanned for TableOption<'a> {
 #[derive(Clone, Debug)]
 pub enum CreateDefinition<'a> {
     ColumnDefinition {
-        identifier: (&'a str, Span),
+        identifier: Identifier<'a>,
         data_type: DataType<'a>,
     },
 }
@@ -194,8 +202,8 @@ pub enum CreateOption<'a> {
     Algorithm(Span, CreateAlgorithm),
     Definer {
         definer_span: Span,
-        user: (&'a str, Span),
-        host: (&'a str, Span),
+        user: Identifier<'a>,
+        host: Identifier<'a>,
     },
     SqlSecurityDefiner(Span, Span),
     SqlSecurityUser(Span, Span),
@@ -222,7 +230,7 @@ pub struct CreateTable<'a> {
     pub create_span: Span,
     pub create_options: Vec<CreateOption<'a>>,
     pub table_span: Span,
-    pub identifier: (&'a str, Span),
+    pub identifier: Identifier<'a>,
     pub if_not_exists: Option<Span>,
     pub create_definitions: Vec<CreateDefinition<'a>>,
     pub options: Vec<TableOption<'a>>,
@@ -246,7 +254,7 @@ pub struct CreateView<'a> {
     pub create_options: Vec<CreateOption<'a>>,
     pub view_span: Span,
     pub if_not_exists: Option<Span>,
-    pub name: (&'a str, Span),
+    pub name: Identifier<'a>,
     pub as_span: Span,
     pub select: Select<'a>,
 }
@@ -263,8 +271,8 @@ impl<'a> Spanned for CreateView<'a> {
     }
 }
 
-pub(crate) fn parse_create_definition<'a>(
-    parser: &mut Parser<'a>,
+pub(crate) fn parse_create_definition<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
 ) -> Result<CreateDefinition<'a>, ParseError> {
     match &parser.token {
         Token::Ident(_, _) => Ok(CreateDefinition::ColumnDefinition {
@@ -275,8 +283,8 @@ pub(crate) fn parse_create_definition<'a>(
     }
 }
 
-fn parse_create_view<'a>(
-    parser: &mut Parser<'a>,
+fn parse_create_view<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -323,7 +331,7 @@ pub enum FunctionCharacteristic<'a> {
     ModifiesSqlData(Span),
     SqlSecurityDefiner(Span),
     SqlSecurityUser(Span),
-    Comment((Cow<'a, str>, Span)),
+    Comment(SString<'a>),
 }
 
 impl<'a> Spanned for FunctionCharacteristic<'a> {
@@ -349,8 +357,8 @@ pub struct CreateFunction<'a> {
     pub create_options: Vec<CreateOption<'a>>,
     pub function_span: Span,
     pub if_not_exists: Option<Span>,
-    pub name: (&'a str, Span),
-    pub params: Vec<((&'a str, Span), DataType<'a>)>,
+    pub name: Identifier<'a>,
+    pub params: Vec<(Identifier<'a>, DataType<'a>)>,
     pub returns_span: Span,
     pub return_type: DataType<'a>,
     pub characteristics: Vec<FunctionCharacteristic<'a>>,
@@ -372,8 +380,8 @@ impl<'a> Spanned for CreateFunction<'a> {
     }
 }
 
-fn parse_create_function<'a>(
-    parser: &mut Parser<'a>,
+fn parse_create_function<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -521,11 +529,11 @@ pub struct CreateTrigger<'a> {
     pub create_options: Vec<CreateOption<'a>>,
     pub trigger_span: Span,
     pub if_not_exists: Option<Span>,
-    pub name: (&'a str, Span),
+    pub name: Identifier<'a>,
     pub trigger_time: TriggerTime,
     pub trigger_event: TriggerEvent,
     pub on_span: Span,
-    pub table: (&'a str, Span),
+    pub table: Identifier<'a>,
     pub for_each_row_span: Span,
     pub statement: Box<Statement<'a>>,
 }
@@ -546,8 +554,8 @@ impl<'a> Spanned for CreateTrigger<'a> {
     }
 }
 
-fn parse_create_trigger<'a>(
-    parser: &mut Parser<'a>,
+fn parse_create_trigger<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -617,14 +625,14 @@ fn parse_create_trigger<'a>(
     }))
 }
 
-fn parse_create_table<'a>(
-    parser: &mut Parser<'a>,
+fn parse_create_table<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
     let table_span = parser.consume_keyword(Keyword::TABLE)?;
 
-    let mut identifier = ("", 0..0);
+    let mut identifier = Identifier::new("", 0..0);
     let mut if_not_exists = None;
 
     parser.recovered("'('", &|t| t == &Token::LParen, |parser| {
@@ -753,7 +761,9 @@ fn parse_create_table<'a>(
     }))
 }
 
-pub(crate) fn parse_create<'a>(parser: &mut Parser<'a>) -> Result<Statement<'a>, ParseError> {
+pub(crate) fn parse_create<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<Statement<'a>, ParseError> {
     let create_span = parser.span.clone();
     parser.consume_keyword(Keyword::CREATE)?;
 

@@ -15,7 +15,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Span, Spanned,
+    Identifier, Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
@@ -40,7 +40,7 @@ pub struct Delete<'a> {
     pub delete_span: Span,
     pub flags: Vec<DeleteFlag>,
     pub from_span: Span,
-    pub table: Vec<(&'a str, Span)>,
+    pub table: Vec<Identifier<'a>>,
     pub where_: Option<(Expression<'a>, Span)>,
 }
 
@@ -54,7 +54,7 @@ impl<'a> Spanned for Delete<'a> {
     }
 }
 
-pub(crate) fn parse_delete<'a>(parser: &mut Parser<'a>) -> Result<Delete<'a>, ParseError> {
+pub(crate) fn parse_delete<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Delete<'a>, ParseError> {
     let delete_span = parser.consume_keyword(Keyword::DELETE)?;
     let mut flags = Vec::new();
 

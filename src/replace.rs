@@ -16,7 +16,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
-    Span, Spanned,
+    Identifier, Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
@@ -39,8 +39,8 @@ pub struct Replace<'a> {
     pub replace_span: Span,
     pub flags: Vec<ReplaceFlag>,
     pub into_span: Option<Span>,
-    pub table: Vec<(&'a str, Span)>,
-    pub columns: Vec<(&'a str, Span)>,
+    pub table: Vec<Identifier<'a>>,
+    pub columns: Vec<Identifier<'a>>,
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
     pub select: Option<Select<'a>>,
 }
@@ -57,7 +57,9 @@ impl<'a> Spanned for Replace<'a> {
     }
 }
 
-pub(crate) fn parse_replace<'a>(parser: &mut Parser<'a>) -> Result<Replace<'a>, ParseError> {
+pub(crate) fn parse_replace<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<Replace<'a>, ParseError> {
     let replace_span = parser.consume_keyword(Keyword::REPLACE)?;
     let mut flags = Vec::new();
 

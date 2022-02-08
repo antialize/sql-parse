@@ -10,15 +10,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
     span::OptSpanned,
-    Level, Span, Spanned,
+    Identifier, SString, Span, Spanned,
 };
 
 #[derive(Debug, Clone)]
@@ -249,7 +247,7 @@ pub enum UnaryOperator {
 
 #[derive(Debug, Clone)]
 pub enum IdentifierPart<'a> {
-    Name((&'a str, Span)),
+    Name(Identifier<'a>),
     Star(Span),
 }
 
@@ -295,7 +293,7 @@ pub enum Expression<'a> {
     Subquery(Box<Select<'a>>),
     Null(Span),
     Bool(bool, Span),
-    String((Cow<'a, str>, Span)),
+    String(SString<'a>),
     Integer((u64, Span)),
     Float((f64, Span)),
     Function(Function<'a>, Vec<Expression<'a>>, Span),
@@ -323,15 +321,10 @@ impl<'a> Spanned for Expression<'a> {
     fn span(&self) -> Span {
         match &self {
             Expression::Binary {
-                op,
-                op_span,
-                lhs,
-                rhs,
+                op_span, lhs, rhs, ..
             } => op_span.join_span(lhs).join_span(rhs),
             Expression::Unary {
-                op,
-                op_span,
-                operand,
+                op_span, operand, ..
             } => op_span.join_span(operand),
             Expression::Subquery(v) => v.span(),
             Expression::Null(v) => v.span(),
@@ -344,10 +337,7 @@ impl<'a> Spanned for Expression<'a> {
             Expression::Arg(v) => v.span(),
             Expression::Exists(v) => v.span(),
             Expression::In {
-                lhs,
-                rhs,
-                in_span,
-                not_in,
+                lhs, rhs, in_span, ..
             } => in_span.join_span(lhs).join_span(rhs),
             Expression::Is(a, _, b) => b.join_span(a),
             Expression::Invalid => todo!(),
@@ -372,8 +362,8 @@ impl<'a> Default for Expression<'a> {
     }
 }
 
-fn parse_function<'a>(
-    parser: &mut Parser<'a>,
+fn parse_function<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     t: Token<'a>,
     span: Span,
 ) -> Result<Expression<'a>, ParseError> {
@@ -571,12 +561,9 @@ fn parse_function<'a>(
         Token::Ident(_, Keyword::JSON_VALUE) => Function::JsonValue,
         Token::Ident(v, k) if !k.reserved() => Function::Other(v),
         _ => {
-            parser.issues.push(crate::Issue {
-                level: Level::Error,
-                message: "Unknown function".to_string(),
-                span: span.clone(),
-                fragments: Vec::new(),
-            });
+            parser
+                .issues
+                .push(crate::Issue::err("Unknown function", &span));
             Function::Unknown
         }
     };
@@ -728,8 +715,8 @@ impl<'a> Reducer<'a> {
     }
 }
 
-pub(crate) fn parse_expression<'a>(
-    parser: &mut Parser<'a>,
+pub(crate) fn parse_expression<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
     inner: bool,
 ) -> Result<Expression<'a>, ParseError> {
     let mut r = Reducer { stack: Vec::new() };
@@ -965,7 +952,9 @@ pub(crate) fn parse_expression<'a>(
                     }
                 }
             }
-            Token::QuestionMark => {
+            Token::QuestionMark
+                if matches!(parser.options.arguments, crate::SQLArguments::QuestionMark) =>
+            {
                 let arg = parser.arg;
                 parser.arg += 1;
                 r.shift_expr(Expression::Arg((
@@ -1038,16 +1027,16 @@ pub(crate) fn parse_expression<'a>(
     if r.reduce(99999).is_err() {
         parser.error("Expected expression")
     } else if r.stack.len() != 1 {
-        parser.error("ICE reducer error 1")
+        parser.ice(file!(), line!())
     } else if let Some(ReduceMember::Expression(e)) = r.stack.pop() {
         Ok(e)
     } else {
-        parser.error("ICE reducer error 2")
+        parser.ice(file!(), line!())
     }
 }
 
-pub(crate) fn parse_expression_outer<'a>(
-    parser: &mut Parser<'a>,
+pub(crate) fn parse_expression_outer<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
 ) -> Result<Expression<'a>, ParseError> {
     if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
         Ok(Expression::Subquery(Box::new(parse_select(parser)?)))
@@ -1058,9 +1047,12 @@ pub(crate) fn parse_expression_outer<'a>(
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Deref;
+
     use crate::{
         expression::{BinaryOperator, Expression},
         parser::Parser,
+        ParseOptions, SQLDialect,
     };
 
     use super::{parse_expression, IdentifierPart};
@@ -1068,7 +1060,7 @@ mod tests {
     fn test_ident<'a>(e: impl AsRef<Expression<'a>>, v: &str) -> Result<(), String> {
         let v = match e.as_ref() {
             Expression::Identifier(a) => match a.as_slice() {
-                [IdentifierPart::Name((vv, _))] => *vv == v,
+                [IdentifierPart::Name(vv)] => vv.deref() == v,
                 _ => false,
             },
             _ => false,
@@ -1081,7 +1073,9 @@ mod tests {
     }
 
     fn test_expr(src: &'static str, f: impl FnOnce(&Expression<'_>) -> Result<(), String>) {
-        let mut parser = Parser::new(src);
+        let mut issues = Vec::new();
+        let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+        let mut parser = Parser::new(src, &mut issues, &options);
         let res = parse_expression(&mut parser, false).unwrap();
         if let Err(e) = f(&res) {
             panic!("Error parsing {}: {}\nGot {:#?}", src, e, res);

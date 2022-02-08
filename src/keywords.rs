@@ -1170,6 +1170,7 @@ WRITE
 XOR
 YEAR_MONTH
 ZEROFILL
+END
 ];
 
 expr_ident![

@@ -12,12 +12,14 @@
 
 use crate::{Span, Spanned};
 
+/// Level of an issues
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
     Warning,
     Error,
 }
 
+/// An issue encountered during parsing, or later stages
 pub struct Issue {
     pub level: Level,
     pub message: String,
@@ -26,6 +28,7 @@ pub struct Issue {
 }
 
 impl Issue {
+    /// Construct an error with given message and span
     pub fn err(message: impl Into<String>, span: &impl Spanned) -> Self {
         Issue {
             level: Level::Error,
@@ -34,6 +37,8 @@ impl Issue {
             fragments: Vec::new(),
         }
     }
+
+    /// Construct a warning with given message and span
     pub fn warn(message: impl Into<String>, span: &impl Spanned) -> Self {
         Issue {
             level: Level::Warning,
@@ -42,11 +47,10 @@ impl Issue {
             fragments: Vec::new(),
         }
     }
+
+    /// Add a fragment with the given message and span
     pub fn frag(mut self, message: impl Into<String>, span: &impl Spanned) -> Self {
         self.fragments.push((message.into(), span.span()));
         self
-    }
-    pub fn todo(span: &impl Spanned) -> Self {
-        Issue::err("Not implemented", span)
     }
 }

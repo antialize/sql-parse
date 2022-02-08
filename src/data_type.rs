@@ -10,15 +10,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use crate::{
     expression::{parse_expression, Expression},
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
     span::OptSpanned,
-    Span, Spanned,
+    Identifier, SString, Span, Spanned,
 };
 
 /// A property on a datatype
@@ -30,9 +28,9 @@ pub enum DataTypeProperty<'a> {
     Null(Span),
     NotNull(Span),
     Default(Box<Expression<'a>>),
-    Comment((Cow<'a, str>, Span)),
-    Charset((&'a str, Span)),
-    Collate((&'a str, Span)),
+    Comment(SString<'a>),
+    Charset(Identifier<'a>),
+    Collate(Identifier<'a>),
     Virtual(Span),
     Persistent(Span),
     Stored(Span),
@@ -67,22 +65,6 @@ impl<'a> Spanned for DataTypeProperty<'a> {
     }
 }
 
-// impl<'a> Spanned for DataTypeProperty<'a> {
-//     fn span(&self) -> Span {
-//         match &self {
-//             DataTypeProperty::Signed(s) => s.clone(),
-//             DataTypeProperty::Unsigned(s) => s.clone(),
-//             DataTypeProperty::Zerofill(s) => s.clone(),
-//             DataTypeProperty::Null(s) => s.clone(),
-//             DataTypeProperty::NotNull(s) => s.clone(),
-//             DataTypeProperty::Default(s) => s.span(),
-//             DataTypeProperty::Comment((_, s)) => s.clone(),
-//             DataTypeProperty::Charset((_, s)) => s.clone(),
-//             DataTypeProperty::Collate((_, s)) => s.clone(),
-//         }
-//     }
-// }
-
 #[derive(Debug, Clone)]
 pub enum Type<'a> {
     TinyInt(Option<(usize, Span)>),
@@ -94,8 +76,8 @@ pub enum Type<'a> {
     MediumText(Option<(usize, Span)>),
     Text(Option<(usize, Span)>),
     LongText(Option<(usize, Span)>),
-    Enum(Vec<(Cow<'a, str>, Span)>),
-    Set(Vec<(Cow<'a, str>, Span)>),
+    Enum(Vec<SString<'a>>),
+    Set(Vec<SString<'a>>),
     Float(Option<(usize, usize, Span)>),
     Double(Option<(usize, usize, Span)>),
     DateTime(Option<(usize, Span)>),
@@ -152,26 +134,7 @@ impl<'a> Spanned for DataType<'a> {
             .join_span(&self.properties)
     }
 }
-
-// impl<'a> Display for DataType<'a> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.type_)?;
-//         for p in &self.properties {
-//             write!(f, " {}", p)?;
-//         }
-//         Ok(())
-//     }
-// }
-
-// impl<'a> Spanned for DataType<'a> {
-//     fn span(&self) -> Span {
-//         self.properties
-//             .iter()
-//             .fold(self.identifier.span(), |a, b| a.join_span(b))
-//     }
-// }
-
-fn parse_width(parser: &mut Parser<'_>) -> Result<Option<(usize, Span)>, ParseError> {
+fn parse_width<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Option<(usize, Span)>, ParseError> {
     if !matches!(parser.token, Token::LParen) {
         return Ok(None);
     }
@@ -181,16 +144,16 @@ fn parse_width(parser: &mut Parser<'_>) -> Result<Option<(usize, Span)>, ParseEr
     Ok(Some(value))
 }
 
-fn parse_width_req(parser: &mut Parser<'_>) -> Result<(usize, Span), ParseError> {
+fn parse_width_req<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<(usize, Span), ParseError> {
     if !matches!(parser.token, Token::LParen) {
         return parser.expected_failure("'('");
     }
     Ok(parse_width(parser)?.unwrap())
 }
 
-fn parse_enum_set_values<'a>(
-    parser: &mut Parser<'a>,
-) -> Result<Vec<(Cow<'a, str>, Span)>, ParseError> {
+fn parse_enum_set_values<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<Vec<SString<'a>>, ParseError> {
     parser.consume_token(Token::LParen)?;
     let mut ans = Vec::new();
     parser.recovered(")", &|t| t == &Token::RParen, |parser| {
@@ -210,7 +173,9 @@ fn parse_enum_set_values<'a>(
     Ok(ans)
 }
 
-pub(crate) fn parse_data_type<'a>(parser: &mut Parser<'a>) -> Result<DataType<'a>, ParseError> {
+pub(crate) fn parse_data_type<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<DataType<'a>, ParseError> {
     let (identifier, type_) = match &parser.token {
         Token::Ident(_, Keyword::TINYINT) => (
             parser.consume_keyword(Keyword::TINYINT)?,
