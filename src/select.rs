@@ -67,14 +67,10 @@ pub enum JoinType {
     Straight(Span),
     Left(Span),
     Right(Span),
-    LeftOuter(Span),
-    RightOuter(Span),
     Natural(Span),
     NaturalInner(Span),
     NaturalLeft(Span),
     NaturalRight(Span),
-    NaturalLeftOuter(Span),
-    NaturalRightOuter(Span),
 }
 impl Spanned for JoinType {
     fn span(&self) -> Span {
@@ -85,14 +81,10 @@ impl Spanned for JoinType {
             JoinType::Straight(v) => v.span(),
             JoinType::Left(v) => v.span(),
             JoinType::Right(v) => v.span(),
-            JoinType::LeftOuter(v) => v.span(),
-            JoinType::RightOuter(v) => v.span(),
             JoinType::Natural(v) => v.span(),
             JoinType::NaturalInner(v) => v.span(),
             JoinType::NaturalLeft(v) => v.span(),
             JoinType::NaturalRight(v) => v.span(),
-            JoinType::NaturalLeftOuter(v) => v.span(),
-            JoinType::NaturalRightOuter(v) => v.span(),
         }
     }
 }
@@ -128,7 +120,7 @@ impl<'a> Spanned for TableReference<'a> {
             } => identifier
                 .opt_join_span(as_span)
                 .opt_join_span(as_)
-                .unwrap(),
+                .expect("span of table"),
             TableReference::Query {
                 query,
                 as_span,
@@ -234,7 +226,7 @@ pub(crate) fn parse_table_reference<'a, 'b>(
                     .join_span(&parser.consume_keyword(Keyword::JOIN)?),
             ),
             Token::Ident(_, Keyword::JOIN) => {
-                JoinType::Straight(parser.consume_keyword(Keyword::JOIN)?)
+                JoinType::Normal(parser.consume_keyword(Keyword::JOIN)?)
             }
             Token::Ident(_, Keyword::STRAIGHT_JOIN) => {
                 JoinType::Straight(parser.consume_keyword(Keyword::STRAIGHT_JOIN)?)
@@ -242,7 +234,7 @@ pub(crate) fn parse_table_reference<'a, 'b>(
             Token::Ident(_, Keyword::LEFT) => {
                 let left = parser.consume_keyword(Keyword::LEFT)?;
                 if let Some(outer) = parser.skip_keyword(Keyword::OUTER) {
-                    JoinType::LeftOuter(
+                    JoinType::Left(
                         left.join_span(&outer)
                             .join_span(&parser.consume_keyword(Keyword::JOIN)?),
                     )
@@ -253,7 +245,7 @@ pub(crate) fn parse_table_reference<'a, 'b>(
             Token::Ident(_, Keyword::RIGHT) => {
                 let right = parser.consume_keyword(Keyword::RIGHT)?;
                 if let Some(outer) = parser.skip_keyword(Keyword::OUTER) {
-                    JoinType::RightOuter(
+                    JoinType::Right(
                         right
                             .join_span(&outer)
                             .join_span(&parser.consume_keyword(Keyword::JOIN)?),
@@ -272,7 +264,7 @@ pub(crate) fn parse_table_reference<'a, 'b>(
                     Token::Ident(_, Keyword::LEFT) => {
                         let left = parser.consume_keyword(Keyword::LEFT)?;
                         if let Some(outer) = parser.skip_keyword(Keyword::OUTER) {
-                            JoinType::NaturalLeftOuter(
+                            JoinType::NaturalLeft(
                                 left.join_span(&outer)
                                     .join_span(&parser.consume_keyword(Keyword::JOIN)?),
                             )
@@ -285,7 +277,7 @@ pub(crate) fn parse_table_reference<'a, 'b>(
                     Token::Ident(_, Keyword::RIGHT) => {
                         let right = parser.consume_keyword(Keyword::RIGHT)?;
                         if let Some(outer) = parser.skip_keyword(Keyword::OUTER) {
-                            JoinType::NaturalRightOuter(
+                            JoinType::NaturalRight(
                                 right
                                     .join_span(&outer)
                                     .join_span(&parser.consume_keyword(Keyword::JOIN)?),

@@ -16,7 +16,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
-    Identifier, Span, Spanned,
+    Identifier, Issue, OptSpanned, Span, Spanned,
 };
 
 #[derive(Clone, Debug)]
@@ -43,6 +43,7 @@ pub struct Replace<'a> {
     pub columns: Vec<Identifier<'a>>,
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
     pub select: Option<Select<'a>>,
+    pub set: Option<(Span, Vec<(Identifier<'a>, Expression<'a>)>)>,
 }
 
 impl<'a> Spanned for Replace<'a> {
@@ -101,7 +102,27 @@ pub(crate) fn parse_replace<'a, 'b>(
 
     let mut select = None;
     let mut values = None;
-    if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
+    let mut set = None;
+    if matches!(parser.token, Token::Ident(_, Keyword::SET)) {
+        let set_span = parser.consume_keyword(Keyword::SET)?;
+        let mut kvps = Vec::new();
+        loop {
+            let col = parser.consume_plain_identifier()?;
+            parser.consume_token(Token::Eq)?;
+            let val = parse_expression(parser, false)?;
+            kvps.push((col, val));
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        if let Some(cs) = columns.opt_span() {
+            parser.issues.push(
+                Issue::err("Columns may not be used here", &cs)
+                    .frag("Together with SET", &set_span),
+            );
+        }
+        set = Some((set_span, kvps));
+    } else if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
         select = Some(parse_select(parser)?);
     } else {
         let values_span = match &parser.token {
@@ -146,5 +167,6 @@ pub(crate) fn parse_replace<'a, 'b>(
         values,
         select,
         columns,
+        set,
     })
 }

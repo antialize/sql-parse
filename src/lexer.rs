@@ -61,6 +61,7 @@ pub enum Token<'a> {
     Spaceship,
     Tilde,
     Eof,
+    PercentS,
 }
 
 impl<'a> Token<'a> {
@@ -113,6 +114,7 @@ impl<'a> Token<'a> {
             Token::DoubleQuotedString(_) => "String",
             Token::Spaceship => "'<=>'",
             Token::Tilde => "'~'",
+            Token::PercentS => "'%s'",
             Token::Eof => "EndOfFile",
         }
     }
@@ -179,7 +181,13 @@ impl<'a> Lexer<'a> {
                 ',' => Token::Comma,
                 '+' => Token::Plus,
                 '*' => Token::Mul,
-                '%' => Token::Mod,
+                '%' => match self.chars.peek() {
+                    Some((_, 's')) => {
+                        self.chars.next();
+                        Token::PercentS
+                    }
+                    _ => Token::Mod,
+                },
                 '#' => Token::Sharp,
                 '@' => Token::At,
                 '~' => Token::Tilde,

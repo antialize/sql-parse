@@ -39,5 +39,3 @@ impl<'a> Spanned for SString<'a> {
         self.span.span()
     }
 }
-
-

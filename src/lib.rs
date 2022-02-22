@@ -10,6 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use lexer::Token;
 use parser::Parser;
 mod alter;
 mod create;
@@ -128,26 +129,22 @@ impl ParseOptions {
 
 #[macro_export]
 macro_rules! issue_ice {
-    ( $spanned:expr ) => {
-        {
-            Issue::err(
-                format!("Internal compiler error in {}:{}", file!(), line!()),
-                $spanned
-            )
-        }
-    };
+    ( $spanned:expr ) => {{
+        Issue::err(
+            format!("Internal compiler error in {}:{}", file!(), line!()),
+            $spanned,
+        )
+    }};
 }
 
 #[macro_export]
 macro_rules! issue_todo {
-    ( $spanned:expr ) => {
-        {
-            Issue::err(
-                format!("Not yet implemented {}:{}", file!(), line!()),
-                $spanned
-            )
-        }
-    };
+    ( $spanned:expr ) => {{
+        Issue::err(
+            format!("Not yet implemented {}:{}", file!(), line!()),
+            $spanned,
+        )
+    }};
 }
 
 /// Parse multiple statements,
@@ -169,5 +166,17 @@ pub fn parse_statement<'a>(
     options: &ParseOptions,
 ) -> Option<Statement<'a>> {
     let mut parser = Parser::new(src, issues, options);
-    statement::parse_statement(&mut parser).unwrap_or_default()
+    match statement::parse_statement(&mut parser) {
+        Ok(Some(v)) => {
+            if parser.token != Token::Eof {
+                parser.expected_error("Unexpected token after statement")
+            }
+            Some(v)
+        }
+        Ok(None) => {
+            parser.expected_error("Statement");
+            None
+        }
+        Err(_) => None,
+    }
 }

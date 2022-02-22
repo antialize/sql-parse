@@ -11,12 +11,13 @@
 // limitations under the License.
 
 use crate::{
+    data_type::parse_data_type,
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
     span::OptSpanned,
-    Identifier, SString, Span, Spanned,
+    DataType, Identifier, SString, Span, Spanned,
 };
 
 #[derive(Debug, Clone)]
@@ -41,7 +42,6 @@ pub enum Function<'a> {
     ConvertTs,
     Cos,
     Cot,
-    Count,
     Crc32,
     Crc32c,
     CurDate,
@@ -307,13 +307,24 @@ pub enum Expression<'a> {
         not_in: bool,
     },
     Is(Box<Expression<'a>>, Is, Span),
-    Invalid,
+    Invalid(Span),
     Case {
         case_span: Span,
         value: Option<Box<Expression<'a>>>,
         whens: Vec<When<'a>>,
         else_: Option<(Span, Box<Expression<'a>>)>,
         end_span: Span,
+    },
+    Cast {
+        cast_span: Span,
+        expr: Box<Expression<'a>>,
+        as_span: Span,
+        type_: DataType<'a>,
+    },
+    Count {
+        count_span: Span,
+        distinct_span: Option<Span>,
+        expr: Box<Expression<'a>>,
     },
 }
 
@@ -333,14 +344,14 @@ impl<'a> Spanned for Expression<'a> {
             Expression::Integer(v) => v.span(),
             Expression::Float(v) => v.span(),
             Expression::Function(_, b, c) => c.join_span(b),
-            Expression::Identifier(v) => v.opt_span().unwrap(),
+            Expression::Identifier(v) => v.opt_span().expect("Span of identifier parts"),
             Expression::Arg(v) => v.span(),
             Expression::Exists(v) => v.span(),
             Expression::In {
                 lhs, rhs, in_span, ..
             } => in_span.join_span(lhs).join_span(rhs),
             Expression::Is(a, _, b) => b.join_span(a),
-            Expression::Invalid => todo!(),
+            Expression::Invalid(s) => s.span(),
             Expression::Case {
                 case_span,
                 value,
@@ -352,13 +363,21 @@ impl<'a> Spanned for Expression<'a> {
                 .join_span(whens)
                 .join_span(else_)
                 .join_span(end_span),
+            Expression::Cast {
+                cast_span,
+                expr,
+                as_span,
+                type_,
+            } => cast_span
+                .join_span(expr)
+                .join_span(as_span)
+                .join_span(type_),
+            Expression::Count {
+                count_span,
+                distinct_span,
+                expr,
+            } => count_span.join_span(distinct_span).join_span(expr),
         }
-    }
-}
-
-impl<'a> Default for Expression<'a> {
-    fn default() -> Self {
-        Self::Invalid
     }
 }
 
@@ -426,7 +445,6 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::SFORMAT) => Function::SFormat,
 
         // TODO uncat
-        Token::Ident(_, Keyword::COUNT) => Function::Count,
         Token::Ident(_, Keyword::EXISTS) => Function::Exists,
         Token::Ident(_, Keyword::MIN) => Function::Min,
         Token::Ident(_, Keyword::MAX) => Function::Max,
@@ -470,6 +488,7 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::TAN) => Function::Tan,
         Token::Ident(_, Keyword::TRUNCATE) => Function::Truncate,
         Token::Ident(_, Keyword::CRC32C) => Function::Crc32c,
+        Token::Ident(_, Keyword::LEAST) => Function::Least,
 
         // https://mariadb.com/kb/en/date-time-functions/
         Token::Ident(_, Keyword::ADDDATE) => Function::AddDate,
@@ -637,6 +656,7 @@ impl Priority for UnaryOperator {
     }
 }
 
+#[derive(Debug)]
 enum ReduceMember<'a> {
     Expression(Expression<'a>),
     Binary(BinaryOperator, Span),
@@ -651,7 +671,10 @@ impl<'a> Reducer<'a> {
     fn reduce(&mut self, priority: usize) -> Result<(), &'static str> {
         let mut e = match self.stack.pop() {
             Some(ReduceMember::Expression(e)) => e,
-            _ => return Err("Expected expression before here"),
+            v => {
+                println!("Expected expression before here {:#?}", v);
+                return Err("Expected expression before here");
+            }
         };
         loop {
             let v = self.stack.pop();
@@ -771,7 +794,7 @@ pub(crate) fn parse_expression<'a, 'b>(
                 }
                 let lhs = match r.stack.pop() {
                     Some(ReduceMember::Expression(e)) => e,
-                    _ => parser.error("Expected expression before here")?,
+                    _ => parser.error("Expected expression before here 3")?,
                 };
                 let op = parser.consume_keyword(Keyword::IN)?;
                 parser.consume_token(Token::LParen)?;
@@ -803,7 +826,7 @@ pub(crate) fn parse_expression<'a, 'b>(
                 }
                 let lhs = match r.stack.pop() {
                     Some(ReduceMember::Expression(e)) => e,
-                    _ => parser.error("Expected expression before here")?,
+                    _ => parser.error("Expected expression before here 4")?,
                 };
                 let op = parser.consume_keyword(Keyword::IS)?;
                 let (is, op) = match &parser.token {
@@ -848,7 +871,7 @@ pub(crate) fn parse_expression<'a, 'b>(
                 }
                 let lhs = match r.stack.pop() {
                     Some(ReduceMember::Expression(e)) => e,
-                    _ => parser.error("Expected expression before here")?,
+                    _ => parser.error("Expected expression before here 2")?,
                 };
                 let op = parser.consume_keyword(Keyword::NOT)?;
                 match &parser.token {
@@ -878,6 +901,7 @@ pub(crate) fn parse_expression<'a, 'b>(
                         })
                     }
                     Token::Ident(_, Keyword::LIKE) => {
+                        r.stack.push(ReduceMember::Expression(lhs));
                         r.shift_binop(parser.consume().join_span(&op), BinaryOperator::NotLike)
                     }
                     _ => parser.expected_failure("'IN' or 'LIKE'")?,
@@ -917,6 +941,46 @@ pub(crate) fn parse_expression<'a, 'b>(
             Token::Integer(_) => r.shift_expr(Expression::Integer(parser.consume_int()?)),
             Token::Float(_) => r.shift_expr(Expression::Float(parser.consume_float()?)),
 
+            Token::Ident(_, Keyword::CAST) => {
+                let cast_span = parser.consume_keyword(Keyword::CAST)?;
+                parser.consume_token(Token::LParen)?;
+                let cast = parser.recovered("')'", &|t| matches!(t, Token::RParen), |parser| {
+                    let expr = parse_expression_outer(parser)?;
+                    let as_span = parser.consume_keyword(Keyword::AS)?;
+                    let type_ = parse_data_type(parser)?;
+                    Ok(Some((expr, as_span, type_)))
+                })?;
+                parser.consume_token(Token::RParen)?;
+                if let Some((expr, as_span, type_)) = cast {
+                    r.shift_expr(Expression::Cast {
+                        cast_span,
+                        expr: Box::new(expr),
+                        as_span,
+                        type_,
+                    })
+                } else {
+                    r.shift_expr(Expression::Invalid(cast_span))
+                }
+            }
+            Token::Ident(_, Keyword::COUNT) => {
+                let count_span = parser.consume_keyword(Keyword::COUNT)?;
+                parser.consume_token(Token::LParen)?;
+                let distinct_span = parser.skip_keyword(Keyword::DISTINCT);
+                let expr = parser.recovered("')'", &|t| matches!(t, Token::RParen), |parser| {
+                    let expr = parse_expression_outer(parser)?;
+                    Ok(Some(expr))
+                })?;
+                parser.consume_token(Token::RParen)?;
+                if let Some(expr) = expr {
+                    r.shift_expr(Expression::Count {
+                        count_span,
+                        distinct_span,
+                        expr: Box::new(expr),
+                    })
+                } else {
+                    r.shift_expr(Expression::Invalid(count_span))
+                }
+            }
             Token::Ident(_, k) if k.expr_ident() => {
                 let i = parser.token.clone();
                 let s = parser.span.clone();
@@ -960,6 +1024,14 @@ pub(crate) fn parse_expression<'a, 'b>(
                 r.shift_expr(Expression::Arg((
                     arg,
                     parser.consume_token(Token::QuestionMark)?,
+                )))
+            }
+            Token::PercentS if matches!(parser.options.arguments, crate::SQLArguments::Percent) => {
+                let arg = parser.arg;
+                parser.arg += 1;
+                r.shift_expr(Expression::Arg((
+                    arg,
+                    parser.consume_token(Token::PercentS)?,
                 )))
             }
             Token::LParen => {
@@ -1076,7 +1148,7 @@ mod tests {
         let mut issues = Vec::new();
         let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
         let mut parser = Parser::new(src, &mut issues, &options);
-        let res = parse_expression(&mut parser, false).unwrap();
+        let res = parse_expression(&mut parser, false).expect("Expression in test expr");
         if let Err(e) = f(&res) {
             panic!("Error parsing {}: {}\nGot {:#?}", src, e, res);
         }

@@ -23,7 +23,7 @@ impl<'a> Identifier<'a> {
         Identifier { value, span }
     }
 
-    pub fn as_str(&self) -> &'a str{
+    pub fn as_str(&self) -> &'a str {
         self.value
     }
 }

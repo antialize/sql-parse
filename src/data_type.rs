@@ -148,7 +148,7 @@ fn parse_width_req<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<(usize, Span),
     if !matches!(parser.token, Token::LParen) {
         return parser.expected_failure("'('");
     }
-    Ok(parse_width(parser)?.unwrap())
+    Ok(parse_width(parser)?.expect("width"))
 }
 
 fn parse_enum_set_values<'a, 'b>(
@@ -332,11 +332,12 @@ pub(crate) fn parse_data_type<'a, 'b>(
             }
             Token::Ident(_, Keyword::AS) => {
                 let span = parser.consume_keyword(Keyword::AS)?;
-                parser.consume_token(Token::LParen)?;
+                let s1 = parser.consume_token(Token::LParen)?;
                 let e = parser.recovered(")", &|t| t == &Token::RParen, |parser| {
-                    parse_expression(parser, false)
+                    Ok(Some(parse_expression(parser, false)?))
                 })?;
-                parser.consume_token(Token::RParen)?;
+                let s2 = parser.consume_token(Token::RParen)?;
+                let e = e.unwrap_or_else(|| Expression::Invalid(s1.join_span(&s2)));
                 properties.push(DataTypeProperty::As((span, Box::new(e))));
             }
             _ => break,

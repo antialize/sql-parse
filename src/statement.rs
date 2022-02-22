@@ -200,16 +200,10 @@ pub enum Statement<'a> {
     AlterTable(AlterTable<'a>),
     Block(Vec<Statement<'a>>), //TODO we should include begin and end
     If(If<'a>),
-    Invalid,
+    Invalid(Span),
     Union(Union<'a>),
     Replace(Replace<'a>),
     Case(CaseStatement<'a>),
-}
-
-impl<'a> Default for Statement<'a> {
-    fn default() -> Self {
-        Self::Invalid
-    }
 }
 
 impl<'a> Spanned for Statement<'a> {
@@ -233,9 +227,9 @@ impl<'a> Spanned for Statement<'a> {
             Statement::DropView(v) => v.span(),
             Statement::Set(v) => v.span(),
             Statement::AlterTable(v) => v.span(),
-            Statement::Block(v) => v.opt_span().unwrap(),
+            Statement::Block(v) => v.opt_span().expect("Span of block"),
             Statement::If(v) => v.span(),
-            Statement::Invalid => todo!(),
+            Statement::Invalid(v) => v.span(),
             Statement::Union(v) => v.span(),
             Statement::Replace(v) => v.span(),
             Statement::Case(v) => v.span(),
@@ -349,12 +343,12 @@ pub(crate) fn parse_compound_query_bottom<'a, 'b>(
 ) -> Result<Statement<'a>, ParseError> {
     match &parser.token {
         Token::LParen => {
-            parser.consume_token(Token::LParen)?;
+            let lp = parser.consume_token(Token::LParen)?;
             let s = parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
-                parse_compound_query(parser)
+                Ok(Some(parse_compound_query(parser)?))
             })?;
             parser.consume_token(Token::RParen)?;
-            Ok(s)
+            Ok(s.unwrap_or_else(|| Statement::Invalid(lp)))
         }
         Token::Ident(_, Keyword::SELECT) => Ok(Statement::Select(parse_select(parser)?)),
         _ => parser.expected_failure("'SELECET' or '('")?,
@@ -533,6 +527,8 @@ pub(crate) fn parse_statements<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Vec<State
                 }
             }
         }
-        parser.consume_token(parser.delimiter.clone()).unwrap();
+        parser
+            .consume_token(parser.delimiter.clone())
+            .expect("Delimiter");
     }
 }
