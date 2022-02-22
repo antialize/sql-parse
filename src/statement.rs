@@ -348,7 +348,7 @@ pub(crate) fn parse_compound_query_bottom<'a, 'b>(
                 Ok(Some(parse_compound_query(parser)?))
             })?;
             parser.consume_token(Token::RParen)?;
-            Ok(s.unwrap_or_else(|| Statement::Invalid(lp)))
+            Ok(s.unwrap_or(Statement::Invalid(lp)))
         }
         Token::Ident(_, Keyword::SELECT) => Ok(Statement::Select(parse_select(parser)?)),
         _ => parser.expected_failure("'SELECET' or '('")?,

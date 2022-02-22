@@ -153,9 +153,7 @@ pub(crate) fn parse_table_reference_inner<'a, 'b>(
         Token::Ident(_, Keyword::SELECT) | Token::LParen => {
             let query = parse_compound_query(parser)?;
             let as_span = parser.skip_keyword(Keyword::AS);
-            let as_ = if as_span.is_some() {
-                Some(parser.consume_plain_identifier()?)
-            } else if matches!(&parser.token, Token::Ident(_, k) if !k.reserved()) {
+            let as_ = if as_span.is_some() || (matches!(&parser.token, Token::Ident(_, k) if !k.reserved())) {
                 Some(parser.consume_plain_identifier()?)
             } else {
                 None
@@ -190,9 +188,7 @@ pub(crate) fn parse_table_reference_inner<'a, 'b>(
 
             // TODO [PARTITION (partition_names)] [[AS] alias]
             let as_span = parser.skip_keyword(Keyword::AS);
-            let as_ = if as_span.is_some() {
-                Some(parser.consume_plain_identifier()?)
-            } else if matches!(&parser.token, Token::Ident(_, k) if !k.reserved()) {
+            let as_ = if as_span.is_some() || (matches!(&parser.token, Token::Ident(_, k) if !k.reserved())) {
                 Some(parser.consume_plain_identifier()?)
             } else {
                 None

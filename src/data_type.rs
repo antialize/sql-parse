@@ -134,7 +134,7 @@ impl<'a> Spanned for DataType<'a> {
             .join_span(&self.properties)
     }
 }
-fn parse_width<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Option<(usize, Span)>, ParseError> {
+fn parse_width(parser: &mut Parser<'_, '_>) -> Result<Option<(usize, Span)>, ParseError> {
     if !matches!(parser.token, Token::LParen) {
         return Ok(None);
     }
@@ -144,7 +144,7 @@ fn parse_width<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Option<(usize, Spa
     Ok(Some(value))
 }
 
-fn parse_width_req<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<(usize, Span), ParseError> {
+fn parse_width_req(parser: &mut Parser<'_, '_>) -> Result<(usize, Span), ParseError> {
     if !matches!(parser.token, Token::LParen) {
         return parser.expected_failure("'('");
     }
