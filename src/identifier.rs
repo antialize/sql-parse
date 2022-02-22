@@ -28,7 +28,7 @@ impl<'a> Identifier<'a> {
     }
 }
 
-impl<'a> std::ops::Deref for Identifier<'a> {
+impl<'a> core::ops::Deref for Identifier<'a> {
     type Target = str;
 
     fn deref(&self) -> &'a Self::Target {

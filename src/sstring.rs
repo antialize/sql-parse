@@ -10,23 +10,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 use crate::{Span, Spanned};
 
+/// A string with attached span
 #[derive(Clone, Debug)]
 pub struct SString<'a> {
+    /// The underlying string
     pub value: Cow<'a, str>,
+    /// The span the string originated from
     pub span: Span,
 }
 
 impl<'a> SString<'a> {
+    /// Construct new SString with given value an span
     pub fn new(value: Cow<'a, str>, span: Span) -> Self {
         Self { value, span }
     }
+
+    /// Return the str value
+    pub fn as_str(&self) -> &str {
+        self.value.as_ref()
+    }
 }
 
-impl<'a> std::ops::Deref for SString<'a> {
+impl<'a> core::ops::Deref for SString<'a> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {

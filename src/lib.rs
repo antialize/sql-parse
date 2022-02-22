@@ -10,6 +10,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Parse SQL into an RST
+//!
+//! Example code:
+//!
+//! This crate provides an lexer and parser that can parse SQL
+//! into an Abstract Syntax Tree (AST). Currently primarily focused
+//! on MariaDB/Mysql.
+//!
+//! ```
+//! use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statement};
+//!
+//! let options = ParseOptions::new()
+//!     .dialect(SQLDialect::MariaDB)
+//!     .arguments(SQLArguments::QuestionMark)
+//!     .warn_unquoted_identifiers(true);
+//!
+//! let mut issues = Vec::new();
+//!
+//! let sql = "SELECT `monkey`,
+//!            FROM `t1` LEFT JOIN `t2` ON `t2`.`id` = `t1.two`
+//!            WHERE `t1`.`id` = ?";
+//!
+//! let ast = parse_statement(sql, &mut issues, &options);
+//!
+//! println!("Issues: {:#?}", issues);
+//! println!("AST: {:#?}", ast);
+//! ```
+//!
+
+#![no_std]
+#![forbid(unsafe_code)]
+extern crate alloc;
+
+use alloc::vec::Vec;
 use lexer::Token;
 use parser::Parser;
 mod alter;
@@ -39,7 +73,10 @@ pub use span::{OptSpanned, Span, Spanned};
 pub use sstring::SString;
 pub use statement::{Statement, Union, UnionType, UnionWith};
 
-pub use alter::{AlterSpecification, AlterTable};
+pub use alter::{
+    AlterSpecification, AlterTable, ForeignKeyOn, ForeignKeyOnAction, ForeignKeyOnType, IndexCol,
+    IndexOption, IndexType,
+};
 pub use create::{
     CreateAlgorithm, CreateDefinition, CreateFunction, CreateOption, CreateTable, CreateTrigger,
     CreateView, TableOption,
@@ -75,12 +112,12 @@ pub enum SQLArguments {
     QuestionMark,
 }
 
-/// Options used when parsing xml
+/// Options used when parsing sql
 #[derive(Clone, Debug)]
 pub struct ParseOptions {
     dialect: SQLDialect,
     arguments: SQLArguments,
-    warn_unqouted_identifiers: bool,
+    warn_unquoted_identifiers: bool,
     warn_none_capital_keywords: bool,
 }
 
@@ -90,7 +127,7 @@ impl Default for ParseOptions {
             dialect: SQLDialect::MariaDB,
             arguments: SQLArguments::None,
             warn_none_capital_keywords: false,
-            warn_unqouted_identifiers: false,
+            warn_unquoted_identifiers: false,
         }
     }
 }
@@ -110,15 +147,15 @@ impl ParseOptions {
         Self { arguments, ..self }
     }
 
-    /// Should we warn about unqueted identifiers
-    pub fn warn_unqouted_identifiers(self, warn_unqouted_identifiers: bool) -> Self {
+    /// Should we warn about unquoted identifiers
+    pub fn warn_unquoted_identifiers(self, warn_unquoted_identifiers: bool) -> Self {
         Self {
-            warn_unqouted_identifiers,
+            warn_unquoted_identifiers,
             ..self
         }
     }
 
-    /// Should we warn about unqueted identifiers
+    /// Should we warn about unquoted identifiers
     pub fn warn_none_capital_keywords(self, warn_none_capital_keywords: bool) -> Self {
         Self {
             warn_none_capital_keywords,
@@ -127,6 +164,7 @@ impl ParseOptions {
     }
 }
 
+/// Construct an "Internal compiler error" issue, containing the current file and line
 #[macro_export]
 macro_rules! issue_ice {
     ( $spanned:expr ) => {{
@@ -137,6 +175,7 @@ macro_rules! issue_ice {
     }};
 }
 
+/// Construct an "Not yet implemented" issue, containing the current file and line
 #[macro_export]
 macro_rules! issue_todo {
     ( $spanned:expr ) => {{
@@ -148,7 +187,9 @@ macro_rules! issue_todo {
 }
 
 /// Parse multiple statements,
-/// return an vec of Statements even if there are parse errors.
+/// return an Vec of Statements even if there are parse errors.
+/// The statements are free of errors if no Error issues are
+/// added to issues
 pub fn parse_statements<'a>(
     src: &'a str,
     issues: &mut Vec<Issue>,
@@ -160,6 +201,8 @@ pub fn parse_statements<'a>(
 
 /// Parse a single statement,
 /// A statement may be returned even if there where parse errors.
+/// The statement is free of errors if no Error issues are
+/// added to issues
 pub fn parse_statement<'a>(
     src: &'a str,
     issues: &mut Vec<Issue>,

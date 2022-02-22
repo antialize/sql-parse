@@ -10,12 +10,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::{boxed::Box, vec::Vec};
+
 /// Byte span of ast fragment
 pub type Span = core::ops::Range<usize>;
 
+/// Compute an optional byte span of an ast fragment
+
 pub trait OptSpanned {
+    /// Compute an optional byte span of an ast fragment
     fn opt_span(&self) -> Option<Span>;
 
+    /// Compute the minimal span containing both self and other
+    /// if either is missing return the other
     fn opt_join_span(&self, other: &impl OptSpanned) -> Option<Span> {
         if let Some(l) = self.opt_span() {
             Some(l.join_span(other))
@@ -25,11 +32,12 @@ pub trait OptSpanned {
     }
 }
 
-/// Return or compute byte span of ast fragment
+/// Compute byte span of an ast fragment
 pub trait Spanned {
-    /// Return or compute byte span of ast fragment
+    /// Compute byte span of an ast fragment
     fn span(&self) -> Span;
 
+    /// Compute the minimal span containing both self and other
     fn join_span(&self, other: &impl OptSpanned) -> Span {
         let l = self.span();
         if let Some(r) = other.opt_span() {
@@ -121,7 +129,7 @@ impl<'a, S: Spanned> Spanned for (&'a str, S) {
     }
 }
 
-impl<'a, S: Spanned> Spanned for (std::borrow::Cow<'a, str>, S) {
+impl<'a, S: Spanned> Spanned for (alloc::borrow::Cow<'a, str>, S) {
     fn span(&self) -> Span {
         self.1.span()
     }

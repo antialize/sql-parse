@@ -121,7 +121,7 @@ impl<'a> Token<'a> {
 }
 pub struct Lexer<'a> {
     src: &'a str,
-    chars: std::iter::Peekable<std::str::CharIndices<'a>>,
+    chars: core::iter::Peekable<core::str::CharIndices<'a>>,
 }
 
 impl<'a> Lexer<'a> {
@@ -133,7 +133,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn s(&self, span: Span) -> &'a str {
-        std::str::from_utf8(&self.src.as_bytes()[span]).unwrap()
+        core::str::from_utf8(&self.src.as_bytes()[span]).unwrap()
     }
 
     fn simple_literal(&mut self, start: usize) -> Token<'a> {

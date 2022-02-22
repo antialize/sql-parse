@@ -10,6 +10,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::{boxed::Box, vec::Vec};
+
 use crate::{
     alter::{parse_alter, AlterTable},
     create::{parse_create, CreateFunction, CreateTable, CreateTrigger, CreateView},
@@ -78,7 +80,7 @@ fn parse_statement_list<'a, 'b>(
     parser: &mut Parser<'a, 'b>,
     out: &mut Vec<Statement<'a>>,
 ) -> Result<(), ParseError> {
-    let old_delimiter = std::mem::replace(&mut parser.delimiter, Token::SemiColon);
+    let old_delimiter = core::mem::replace(&mut parser.delimiter, Token::SemiColon);
     let r = parse_statement_list_inner(parser, out);
     parser.delimiter = old_delimiter;
     r

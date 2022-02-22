@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,11 +19,16 @@ use crate::{
     DataType, Identifier, SString, Span, Spanned, Statement,
 };
 
+/// Option on an index
 #[derive(Clone, Debug)]
 pub enum IndexOption<'a> {
+    /// The index should be a BTree
     IndexTypeBTree(Span),
+    /// The index should be hashed
     IndexTypeHash(Span),
+    /// The index should be an RTree
     IndexTypeRTree(Span),
+    /// Attach a comment to the index
     Comment(SString<'a>),
 }
 
@@ -36,6 +43,7 @@ impl<'a> Spanned for IndexOption<'a> {
     }
 }
 
+/// Type of index to add
 #[derive(Clone, Debug)]
 pub enum IndexType {
     Index(Span),
@@ -57,23 +65,25 @@ impl Spanned for IndexType {
     }
 }
 
+/// When to take a foreign key action
 #[derive(Clone, Debug)]
-pub enum ForeginKeyOnType {
+pub enum ForeignKeyOnType {
     Update(Span),
     Delete(Span),
 }
 
-impl Spanned for ForeginKeyOnType {
+impl Spanned for ForeignKeyOnType {
     fn span(&self) -> Span {
         match &self {
-            ForeginKeyOnType::Update(v) => v.span(),
-            ForeginKeyOnType::Delete(v) => v.span(),
+            ForeignKeyOnType::Update(v) => v.span(),
+            ForeignKeyOnType::Delete(v) => v.span(),
         }
     }
 }
 
+/// Action to take on event for foreign key
 #[derive(Clone, Debug)]
-pub enum ForeginKeyOnAction {
+pub enum ForeignKeyOnAction {
     Restrict(Span),
     Cascade(Span),
     SetNull(Span),
@@ -81,33 +91,37 @@ pub enum ForeginKeyOnAction {
     SetDefault(Span),
 }
 
-impl Spanned for ForeginKeyOnAction {
+impl Spanned for ForeignKeyOnAction {
     fn span(&self) -> Span {
         match &self {
-            ForeginKeyOnAction::Restrict(v) => v.span(),
-            ForeginKeyOnAction::Cascade(v) => v.span(),
-            ForeginKeyOnAction::SetNull(v) => v.span(),
-            ForeginKeyOnAction::NoAction(v) => v.span(),
-            ForeginKeyOnAction::SetDefault(v) => v.span(),
+            ForeignKeyOnAction::Restrict(v) => v.span(),
+            ForeignKeyOnAction::Cascade(v) => v.span(),
+            ForeignKeyOnAction::SetNull(v) => v.span(),
+            ForeignKeyOnAction::NoAction(v) => v.span(),
+            ForeignKeyOnAction::SetDefault(v) => v.span(),
         }
     }
 }
 
+/// Action to perform on events on foreign keys
 #[derive(Clone, Debug)]
-pub struct ForeginKeyOn {
-    pub type_: ForeginKeyOnType,
-    pub action: ForeginKeyOnAction,
+pub struct ForeignKeyOn {
+    pub type_: ForeignKeyOnType,
+    pub action: ForeignKeyOnAction,
 }
 
-impl Spanned for ForeginKeyOn {
+impl Spanned for ForeignKeyOn {
     fn span(&self) -> Span {
         self.type_.join_span(&self.action)
     }
 }
 
+/// Specify a column for an index, together with a with
 #[derive(Clone, Debug)]
 pub struct IndexCol<'a> {
+    /// The name of the column
     pub name: Identifier<'a>,
+    /// Optional width of index together with its span
     pub size: Option<(u32, Span)>,
 }
 
@@ -117,33 +131,58 @@ impl<'a> Spanned for IndexCol<'a> {
     }
 }
 
+/// Enum of alterations to perform on a table
 #[derive(Clone, Debug)]
 pub enum AlterSpecification<'a> {
+    /// Add an index
     AddIndex {
+        /// Span of "ADD"
         add_span: Span,
+        /// The type of index to add
         index_type: IndexType,
+        /// Span of "IF NOT EXISTS" if specified
         if_not_exists: Option<Span>,
+        /// Named of index if specified
         name: Option<Identifier<'a>>,
+        /// Optional "CONSTRAINT" with symbol if specified
         constraint: Option<(Span, Option<Identifier<'a>>)>,
+        /// Columns to add the index over
         cols: Vec<IndexCol<'a>>,
+        /// Options on the index
         index_options: Vec<IndexOption<'a>>,
     },
-    AddForeginKey {
+    /// Add a foreign key
+    AddForeignKey {
+        /// Span of "ADD"
         add_span: Span,
+        /// Optional "CONSTRAINT" with symbol if specified
         constraint: Option<(Span, Option<Identifier<'a>>)>,
-        foregin_key_span: Span,
+        /// Span of "FOREIGN KEY"
+        foreign_key_span: Span,
+        /// Span of "IF NOT EXISTS" if specified
         if_not_exists: Option<Span>,
+        /// Named of index if specified
         name: Option<Identifier<'a>>,
+        /// Columns to add the index over
         cols: Vec<IndexCol<'a>>,
+        /// Span of "REFERENCES"
         references_span: Span,
+        /// Refereed table
         references_table: Identifier<'a>,
+        /// Columns in referred table
         references_cols: Vec<Identifier<'a>>,
-        ons: Vec<ForeginKeyOn>,
+        /// List of what should happen at specified events
+        ons: Vec<ForeignKeyOn>,
     },
+    /// Modify a column
     Modify {
+        // Span of "MODIFY"
         modify_span: Span,
+        /// Span of "IF EXISTS" if specified
         if_exists: Option<Span>,
+        /// Name of column to modify
         col: Identifier<'a>,
+        /// New definition of column
         definition: DataType<'a>,
     },
 }
@@ -166,10 +205,10 @@ impl<'a> Spanned for AlterSpecification<'a> {
                 .join_span(constraint)
                 .join_span(cols)
                 .join_span(index_options),
-            AlterSpecification::AddForeginKey {
+            AlterSpecification::AddForeignKey {
                 add_span,
                 constraint,
-                foregin_key_span,
+                foreign_key_span: foregin_key_span,
                 if_not_exists,
                 name,
                 cols,
@@ -319,10 +358,10 @@ fn parse_add_alter_specification<'a, 'b>(
             let mut ons = Vec::new();
             while let Some(on) = parser.skip_keyword(Keyword::ON) {
                 let type_ = match parser.token {
-                    Token::Ident(_, Keyword::UPDATE) => ForeginKeyOnType::Update(
+                    Token::Ident(_, Keyword::UPDATE) => ForeignKeyOnType::Update(
                         parser.consume_keyword(Keyword::UPDATE)?.join_span(&on),
                     ),
-                    Token::Ident(_, Keyword::DELETE) => ForeginKeyOnType::Delete(
+                    Token::Ident(_, Keyword::DELETE) => ForeignKeyOnType::Delete(
                         parser.consume_keyword(Keyword::DELETE)?.join_span(&on),
                     ),
                     _ => parser.expected_failure("'UPDATE' or 'DELETE'")?,
@@ -330,34 +369,34 @@ fn parse_add_alter_specification<'a, 'b>(
 
                 let action = match parser.token {
                     Token::Ident(_, Keyword::RESTRICT) => {
-                        ForeginKeyOnAction::Restrict(parser.consume_keyword(Keyword::RESTRICT)?)
+                        ForeignKeyOnAction::Restrict(parser.consume_keyword(Keyword::RESTRICT)?)
                     }
                     Token::Ident(_, Keyword::CASCADE) => {
-                        ForeginKeyOnAction::Cascade(parser.consume_keyword(Keyword::CASCADE)?)
+                        ForeignKeyOnAction::Cascade(parser.consume_keyword(Keyword::CASCADE)?)
                     }
                     Token::Ident(_, Keyword::SET) => {
                         let set = parser.consume_keyword(Keyword::SET)?;
                         match parser.token {
-                            Token::Ident(_, Keyword::NULL) => ForeginKeyOnAction::SetNull(
+                            Token::Ident(_, Keyword::NULL) => ForeignKeyOnAction::SetNull(
                                 parser.consume_keyword(Keyword::NULL)?.join_span(&set),
                             ),
-                            Token::Ident(_, Keyword::DELETE) => ForeginKeyOnAction::SetDefault(
+                            Token::Ident(_, Keyword::DELETE) => ForeignKeyOnAction::SetDefault(
                                 parser.consume_keyword(Keyword::DEFAULT)?.join_span(&set),
                             ),
                             _ => parser.expected_failure("'NULL' or 'DEFAULT'")?,
                         }
                     }
-                    Token::Ident(_, Keyword::NO) => ForeginKeyOnAction::SetNull(
+                    Token::Ident(_, Keyword::NO) => ForeignKeyOnAction::SetNull(
                         parser.consume_keywords(&[Keyword::NO, Keyword::ACTION])?,
                     ),
                     _ => parser.expected_failure("'RESTRICT' or 'CASCADE', 'SET' or 'NO")?,
                 };
-                ons.push(ForeginKeyOn { type_, action })
+                ons.push(ForeignKeyOn { type_, action })
             }
-            Ok(AlterSpecification::AddForeginKey {
+            Ok(AlterSpecification::AddForeignKey {
                 add_span,
                 constraint,
-                foregin_key_span,
+                foreign_key_span: foregin_key_span,
                 if_not_exists,
                 name,
                 cols,
@@ -452,14 +491,43 @@ fn parse_add_alter_specification<'a, 'b>(
     }
 }
 
+/// Represent an alter table statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, AlterTable, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+///
+/// let sql = "ALTER TABLE `t1`
+///     MODIFY `id` int(11) NOT NULL AUTO_INCREMENT,
+///     ADD CONSTRAINT `t1_t2` FOREIGN KEY (`two`) REFERENCES `t2` (`id`);";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let alter: AlterTable = match stmts.pop() {
+///     Some(Statement::AlterTable(a)) => a,
+///     _ => panic!("We should get an alter table statement")
+/// };
+///
+/// assert!(alter.table.as_str() == "t1");
+/// println!("{:#?}", alter.alter_specifications)
+///
 #[derive(Clone, Debug)]
 pub struct AlterTable<'a> {
+    /// Span of "ALTER"
     pub alter_span: Span,
+    /// Span of "ONLINE" if specified
     pub online: Option<Span>,
+    /// Span of "IGNORE" if specified
     pub ignore: Option<Span>,
+    /// Span of "TABLE"
     pub table_span: Span,
+    /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
+    /// The identifier of the table to alter
     pub table: Identifier<'a>,
+    /// List of alterations to do
     pub alter_specifications: Vec<AlterSpecification<'a>>,
 }
 

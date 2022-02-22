@@ -19,6 +19,9 @@ use crate::{
     span::OptSpanned,
     DataType, Identifier, SString, Span, Spanned,
 };
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::{boxed::Box, vec::Vec};
 
 #[derive(Debug, Clone)]
 pub enum Function<'a> {
@@ -671,8 +674,7 @@ impl<'a> Reducer<'a> {
     fn reduce(&mut self, priority: usize) -> Result<(), &'static str> {
         let mut e = match self.stack.pop() {
             Some(ReduceMember::Expression(e)) => e,
-            v => {
-                println!("Expected expression before here {:#?}", v);
+            _ => {
                 return Err("Expected expression before here");
             }
         };
@@ -1119,7 +1121,13 @@ pub(crate) fn parse_expression_outer<'a, 'b>(
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Deref;
+    use core::ops::Deref;
+
+    use alloc::{
+        format,
+        string::{String, ToString},
+        vec::Vec,
+    };
 
     use crate::{
         expression::{BinaryOperator, Expression},

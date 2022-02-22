@@ -10,6 +10,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::vec;
+use alloc::{boxed::Box, vec::Vec};
+
 use crate::{
     expression::{parse_expression, Expression},
     keywords::Keyword,
@@ -153,7 +156,9 @@ pub(crate) fn parse_table_reference_inner<'a, 'b>(
         Token::Ident(_, Keyword::SELECT) | Token::LParen => {
             let query = parse_compound_query(parser)?;
             let as_span = parser.skip_keyword(Keyword::AS);
-            let as_ = if as_span.is_some() || (matches!(&parser.token, Token::Ident(_, k) if !k.reserved())) {
+            let as_ = if as_span.is_some()
+                || (matches!(&parser.token, Token::Ident(_, k) if !k.reserved()))
+            {
                 Some(parser.consume_plain_identifier()?)
             } else {
                 None
@@ -188,7 +193,9 @@ pub(crate) fn parse_table_reference_inner<'a, 'b>(
 
             // TODO [PARTITION (partition_names)] [[AS] alias]
             let as_span = parser.skip_keyword(Keyword::AS);
-            let as_ = if as_span.is_some() || (matches!(&parser.token, Token::Ident(_, k) if !k.reserved())) {
+            let as_ = if as_span.is_some()
+                || (matches!(&parser.token, Token::Ident(_, k) if !k.reserved()))
+            {
                 Some(parser.consume_plain_identifier()?)
             } else {
                 None

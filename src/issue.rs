@@ -10,6 +10,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use alloc::{string::String, vec::Vec};
+
 use crate::{Span, Spanned};
 
 /// Level of an issues
@@ -22,9 +24,13 @@ pub enum Level {
 /// An issue encountered during parsing, or later stages
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Issue {
+    /// The level of the issue
     pub level: Level,
+    /// The primary message of the issue
     pub message: String,
+    /// The span to attach the primary message to
     pub span: Span,
+    /// List of secondary messages and spans
     pub fragments: Vec<(String, Span)>,
 }
 

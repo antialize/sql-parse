@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{borrow::Cow, fmt::Write};
+use alloc::{borrow::Cow, fmt::Write, format, string::String, vec::Vec};
 
 use crate::{
     issue::Issue,
@@ -76,8 +76,8 @@ pub(crate) fn decode_double_quoted_string(s: &str) -> Cow<'_, str> {
 
 pub(crate) struct SingleQuotedString<'a>(pub(crate) &'a str);
 
-impl<'a> std::fmt::Display for SingleQuotedString<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'a> alloc::fmt::Display for SingleQuotedString<'a> {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         f.write_char('\'')?;
         for c in self.0.chars() {
             if c == '\'' {
@@ -207,7 +207,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                         &span,
                     ));
                 } else if kw != &Keyword::QUOTED_IDENTIFIER
-                    && self.options.warn_unqouted_identifiers
+                    && self.options.warn_unquoted_identifiers
                 {
                     self.issues.push(Issue::warn(
                         format!("identifiers should be quoted as `{}`", v),
@@ -230,7 +230,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                         &self.span,
                     ));
                 } else if kw != &Keyword::QUOTED_IDENTIFIER
-                    && self.options.warn_unqouted_identifiers
+                    && self.options.warn_unquoted_identifiers
                 {
                     self.issues.push(Issue::warn(
                         format!("identifiers should be quoted as `{}`", v),
@@ -335,7 +335,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(SString::new(a, b))
     }
 
-    pub(crate) fn consume_int<T: std::str::FromStr + Default>(
+    pub(crate) fn consume_int<T: core::str::FromStr + Default>(
         &mut self,
     ) -> Result<(T, Span), ParseError> {
         match &self.token {
@@ -352,7 +352,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    pub(crate) fn consume_float<T: std::str::FromStr + Default>(
+    pub(crate) fn consume_float<T: core::str::FromStr + Default>(
         &mut self,
     ) -> Result<(T, Span), ParseError> {
         match &self.token {
