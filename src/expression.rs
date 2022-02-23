@@ -280,25 +280,43 @@ impl<'a> Spanned for When<'a> {
     }
 }
 
+/// Representation of an expression
 #[derive(Debug, Clone)]
 pub enum Expression<'a> {
+    /// Expression with binary operator
     Binary {
+        /// The operator to apply
         op: BinaryOperator,
+        /// The span of the operator
         op_span: Span,
+        /// Expression on the left hand side
         lhs: Box<Expression<'a>>,
+        /// Expression on the right hand side
         rhs: Box<Expression<'a>>,
     },
+    /// Expression with a unary (prefix) operator
     Unary {
+        /// The operator to apply
         op: UnaryOperator,
+        /// The span of the operator
         op_span: Span,
+        /// The expression on the right hand side
         operand: Box<Expression<'a>>,
     },
+    /// Subquery expression
     Subquery(Box<Select<'a>>),
+    /// Literal NULL expression
     Null(Span),
+    /// Literal bool expression "TRUE" or "FALSE"
     Bool(bool, Span),
+    /// Literal string expression, the SString contains the represented string
+    /// with escaping removed
     String(SString<'a>),
+    /// Literal integer expression
     Integer((u64, Span)),
+    /// Literal floating point expression
     Float((f64, Span)),
+    /// Function call expression,
     Function(Function<'a>, Vec<Expression<'a>>, Span),
     Identifier(Vec<IdentifierPart<'a>>),
     Arg((usize, Span)),

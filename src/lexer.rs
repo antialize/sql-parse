@@ -14,7 +14,7 @@ use crate::{keywords::Keyword, Span};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Token<'a> {
+pub(crate) enum Token<'a> {
     Ampersand,
     At,
     Backslash,
@@ -119,7 +119,7 @@ impl<'a> Token<'a> {
         }
     }
 }
-pub struct Lexer<'a> {
+pub(crate) struct Lexer<'a> {
     src: &'a str,
     chars: core::iter::Peekable<core::str::CharIndices<'a>>,
 }

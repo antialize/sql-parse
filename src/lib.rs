@@ -68,7 +68,6 @@ mod update;
 pub use data_type::{DataType, DataTypeProperty, Type};
 pub use identifier::Identifier;
 pub use issue::{Issue, Level};
-pub use lexer::Lexer;
 pub use span::{OptSpanned, Span, Spanned};
 pub use sstring::SString;
 pub use statement::{Statement, Union, UnionType, UnionWith};
