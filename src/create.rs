@@ -21,6 +21,7 @@ use crate::{
     DataType, Identifier, SString, Span, Spanned, Statement,
 };
 
+/// Options on created table
 #[derive(Clone, Debug)]
 pub enum TableOption<'a> {
     AutoExtendSize {
@@ -162,10 +163,13 @@ impl<'a> Spanned for TableOption<'a> {
     }
 }
 
+/// Definition in create table
 #[derive(Clone, Debug)]
 pub enum CreateDefinition<'a> {
     ColumnDefinition {
+        /// Name of column
         identifier: Identifier<'a>,
+        /// Datatype and options for column
         data_type: DataType<'a>,
     },
 }
@@ -181,6 +185,7 @@ impl<'a> Spanned for CreateDefinition<'a> {
     }
 }
 
+/// Special algorithm used for table creation
 #[derive(Clone, Debug)]
 pub enum CreateAlgorithm {
     Undefined(Span),
@@ -197,6 +202,7 @@ impl<'a> Spanned for CreateAlgorithm {
     }
 }
 
+/// Options for create statement
 #[derive(Clone, Debug)]
 pub enum CreateOption<'a> {
     OrReplace(Span),
@@ -227,14 +233,48 @@ impl<'a> Spanned for CreateOption<'a> {
     }
 }
 
+/// Represent a create table statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTable, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+///
+/// let sql = "CREATE TABLE `parts` (
+///         `id` int(11) NOT NULL COMMENT 'THIS IS THE ID FIELD',
+///         `hash` varchar(64) COLLATE utf8_bin NOT NULL,
+///         `destination` varchar(64) COLLATE utf8_bin NOT NULL,
+///         `part` varchar(64) COLLATE utf8_bin NOT NULL,
+///         `success` tinyint(1) NOT NULL
+///     ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let create: CreateTable = match stmts.pop() {
+///     Some(Statement::CreateTable(c)) => c,
+///     _ => panic!("We should get an create table statement")
+/// };
+///
+/// assert!(create.identifier.as_str() == "parts");
+/// println!("{:#?}", create.create_definitions)
+/// ```
+
 #[derive(Clone, Debug)]
 pub struct CreateTable<'a> {
+    /// Span of "CREATE"
     pub create_span: Span,
+    /// Options specified after "CREATE"
     pub create_options: Vec<CreateOption<'a>>,
+    /// Span of "TABLE"
     pub table_span: Span,
+    /// Name of the table
     pub identifier: Identifier<'a>,
+    /// Span of "IF NOT EXISTS" if specified
     pub if_not_exists: Option<Span>,
+    /// Definitions of table members
     pub create_definitions: Vec<CreateDefinition<'a>>,
+    /// Options specified after the table creation
     pub options: Vec<TableOption<'a>>,
 }
 
@@ -250,14 +290,47 @@ impl<'a> Spanned for CreateTable<'a> {
     }
 }
 
+/// Represent a create view statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateView, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+///
+/// let sql = "CREATE ALGORITHM=UNDEFINED DEFINER=`phpmyadmin`@`localhost` SQL SECURITY DEFINER
+///    VIEW `v1`
+///    AS SELECT
+///         `t1`.`id` AS `id`,
+///         `t1`.`c1` AS `c1`,
+///         (SELECT `t2`.`c2` FROM `t2` WHERE `t2`.`id` = `t1`.`c3`) AS `c2`
+///         FROM `t1` WHERE `t1`.`deleted` IS NULL;";
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let create: CreateView = match stmts.pop() {
+///     Some(Statement::CreateView(c)) => c,
+///     _ => panic!("We should get an create view statement")
+/// };
+///
+/// assert!(create.name.as_str() == "v1");
+/// println!("{:#?}", create.select)
+/// ```
+
 #[derive(Clone, Debug)]
 pub struct CreateView<'a> {
+    /// Span of "CREATE"
     pub create_span: Span,
+    /// Options after "CREATE"
     pub create_options: Vec<CreateOption<'a>>,
+    /// Span of "VIEW"
     pub view_span: Span,
+    /// Span of "IF NOT EXISTS" if specified
     pub if_not_exists: Option<Span>,
+    /// Name of the created view
     pub name: Identifier<'a>,
+    /// Span of "AS"
     pub as_span: Span,
+    /// The select statement following "AS"
     pub select: Select<'a>,
 }
 
@@ -322,6 +395,7 @@ fn parse_create_view<'a, 'b>(
     }))
 }
 
+/// Characteristic of a function
 #[derive(Clone, Debug)]
 pub enum FunctionCharacteristic<'a> {
     LanguageSql(Span),
@@ -353,18 +427,74 @@ impl<'a> Spanned for FunctionCharacteristic<'a> {
     }
 }
 
+/// Direction of a function argument
+#[derive(Clone, Debug)]
+pub enum FunctionParamDirection {
+    In(Span),
+    Out(Span),
+    InOut(Span),
+}
+
+impl Spanned for FunctionParamDirection {
+    fn span(&self) -> Span {
+        match &self {
+            FunctionParamDirection::In(v) => v.span(),
+            FunctionParamDirection::Out(v) => v.span(),
+            FunctionParamDirection::InOut(v) => v.span(),
+        }
+    }
+}
+
+/// Representation of Create Function Statement
+///
+/// This is not fully implemented yet
+///
+/// ```ignore
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateFunction, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+///
+/// let sql = "DELIMITER $$
+/// CREATE FUNCTION add_func3(IN a INT, IN b INT, OUT c INT) RETURNS INT
+/// BEGIN
+///     SET c = 100;
+///     RETURN a + b;
+/// END;
+/// $$
+/// DELIMITER ;";
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// assert!(issues.is_empty());
+/// #
+/// let create: CreateFunction = match stmts.pop() {
+///     Some(Statement::CreateFunction(c)) => c,
+///     _ => panic!("We should get an create function statement")
+/// };
+///
+/// assert!(create.name.as_str() == "add_func3");
+/// println!("{:#?}", create.return_)
+/// ```
 #[derive(Clone, Debug)]
 pub struct CreateFunction<'a> {
+    /// Span of "CREATE"
     pub create_span: Span,
+    /// Options after "CREATE"
     pub create_options: Vec<CreateOption<'a>>,
+    /// Span of "FUNCTION"
     pub function_span: Span,
+    /// Span of "IF NOT EXISTS" if specified
     pub if_not_exists: Option<Span>,
+    /// Name o created function
     pub name: Identifier<'a>,
-    pub params: Vec<(Identifier<'a>, DataType<'a>)>,
+    /// Names and types of function arguments
+    pub params: Vec<(FunctionParamDirection, Identifier<'a>, DataType<'a>)>,
+    /// Span of "RETURNS"
     pub returns_span: Span,
+    /// Type of return value
     pub return_type: DataType<'a>,
+    /// Characteristics of created function
     pub characteristics: Vec<FunctionCharacteristic<'a>>,
-    pub return_span: Span,
+    /// Statement computing return value
     pub return_: Box<Statement<'a>>,
 }
 
@@ -377,7 +507,6 @@ impl<'a> Spanned for CreateFunction<'a> {
             .join_span(&self.name)
             .join_span(&self.return_type)
             .join_span(&self.characteristics)
-            .join_span(&self.return_span)
             .join_span(&self.return_)
     }
 }
@@ -404,9 +533,27 @@ fn parse_create_function<'a, 'b>(
     parser.consume_token(Token::LParen)?;
     parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
         loop {
+            let direction = match &parser.token {
+                Token::Ident(_, Keyword::IN) => {
+                    let in_ = parser.consume_keyword(Keyword::IN)?;
+                    if let Some(out) = parser.skip_keyword(Keyword::OUT) {
+                        FunctionParamDirection::InOut(in_.join_span(&out))
+                    } else {
+                        FunctionParamDirection::In(in_)
+                    }
+                }
+                Token::Ident(_, Keyword::OUT) => {
+                    FunctionParamDirection::Out(parser.consume_keyword(Keyword::OUT)?)
+                }
+                Token::Ident(_, Keyword::INOUT) => {
+                    FunctionParamDirection::InOut(parser.consume_keyword(Keyword::INOUT)?)
+                }
+                _ => parser.expected_failure("'IN', 'OUT' or 'INOUT'")?,
+            };
+
             let name = parser.consume_plain_identifier()?;
             let type_ = parse_data_type(parser)?;
-            params.push((name, type_));
+            params.push((direction, name, type_));
             if parser.skip_token(Token::Comma).is_none() {
                 break;
             }
@@ -471,7 +618,6 @@ fn parse_create_function<'a, 'b>(
         characteristics.push(f);
     }
 
-    let return_span = parser.consume_keyword(Keyword::RETURN)?;
     let return_ = match parse_statement(parser)? {
         Some(v) => Box::new(v),
         None => parser.expected_failure("statement")?,
@@ -484,14 +630,14 @@ fn parse_create_function<'a, 'b>(
         if_not_exists,
         name,
         params,
-        returns_span,
         return_type,
         characteristics,
-        return_span,
         return_,
+        returns_span,
     }))
 }
 
+/// When to fire the trigger
 #[derive(Clone, Debug)]
 
 pub enum TriggerTime {
@@ -508,6 +654,7 @@ impl Spanned for TriggerTime {
     }
 }
 
+/// On what event to fire the trigger
 #[derive(Clone, Debug)]
 pub enum TriggerEvent {
     Update(Span),
@@ -525,18 +672,60 @@ impl Spanned for TriggerEvent {
     }
 }
 
+/// Represent a create trigger statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTrigger, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+///
+/// let sql = "DROP TRIGGER IF EXISTS `my_trigger`;
+/// DELIMITER $$
+/// CREATE TRIGGER `my_trigger` AFTER DELETE ON `things` FOR EACH ROW BEGIN
+///     IF OLD.`value` IS NOT NULL THEN
+///         UPDATE `t2` AS `j`
+///             SET
+///             `j`.`total_items` = `total_items` - 1
+///             WHERE `j`.`id`=OLD.`value` AND NOT `j`.`frozen`;
+///         END IF;
+///     INSERT INTO `updated_things` (`thing`) VALUES (OLD.`id`);
+/// END
+/// $$
+/// DELIMITER ;";
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let create: CreateTrigger = match stmts.pop() {
+///     Some(Statement::CreateTrigger(c)) => c,
+///     _ => panic!("We should get an create trigger statement")
+/// };
+///
+/// assert!(create.name.as_str() == "my_trigger");
+/// println!("{:#?}", create.statement)
+/// ```
 #[derive(Clone, Debug)]
 pub struct CreateTrigger<'a> {
+    /// Span of "CREATE"
     pub create_span: Span,
+    /// Options after "CREATE"
     pub create_options: Vec<CreateOption<'a>>,
+    /// Span of "TRIGGER"
     pub trigger_span: Span,
+    /// Span of "IF NOT EXISTS" if specified
     pub if_not_exists: Option<Span>,
+    /// Name of the created trigger
     pub name: Identifier<'a>,
+    /// Should the trigger be fired before or after the event
     pub trigger_time: TriggerTime,
+    /// What event should the trigger be fired on
     pub trigger_event: TriggerEvent,
+    /// Span of "ON"
     pub on_span: Span,
+    /// Name of table to create the trigger on
     pub table: Identifier<'a>,
+    /// Span of "FOR EACH ROW"
     pub for_each_row_span: Span,
+    /// Statement to execute
     pub statement: Box<Statement<'a>>,
 }
 
