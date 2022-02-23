@@ -21,6 +21,7 @@ use crate::{
     Identifier, Span, Spanned,
 };
 
+/// Flags for deletion
 #[derive(Clone, Debug)]
 pub enum DeleteFlag {
     LowPriority(Span),
@@ -38,12 +39,37 @@ impl Spanned for DeleteFlag {
     }
 }
 
+/// Represent a delete statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, Delete, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DELETE FROM t1 WHERE c1 IN (SELECT b.c1 FROM t1 b WHERE b.c2=0);";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let delete: Delete = match stmts.pop() {
+///     Some(Statement::Delete(d)) => d,
+///     _ => panic!("We should get a delete statement")
+/// };
+///
+/// assert!(delete.table.get(0).unwrap().as_str() == "t1");
+/// println!("{:#?}", delete.where_)
+/// ```
 #[derive(Clone, Debug)]
 pub struct Delete<'a> {
+    /// Span of "DELETE"
     pub delete_span: Span,
+    /// Flags following "DELETE"
     pub flags: Vec<DeleteFlag>,
+    /// Span of "FROM"
     pub from_span: Span,
+    /// Tables to do deletes on
     pub table: Vec<Identifier<'a>>,
+    /// Where expression and Span of "WHERE" if specified
     pub where_: Option<(Expression<'a>, Span)>,
 }
 

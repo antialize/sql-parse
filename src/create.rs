@@ -238,7 +238,7 @@ impl<'a> Spanned for CreateOption<'a> {
 /// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTable, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
-///
+/// #
 /// let sql = "CREATE TABLE `parts` (
 ///         `id` int(11) NOT NULL COMMENT 'THIS IS THE ID FIELD',
 ///         `hash` varchar(64) COLLATE utf8_bin NOT NULL,
@@ -295,7 +295,7 @@ impl<'a> Spanned for CreateTable<'a> {
 /// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateView, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
-///
+/// #
 /// let sql = "CREATE ALGORITHM=UNDEFINED DEFINER=`phpmyadmin`@`localhost` SQL SECURITY DEFINER
 ///    VIEW `v1`
 ///    AS SELECT
@@ -453,7 +453,7 @@ impl Spanned for FunctionParamDirection {
 /// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateFunction, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
-///
+/// #
 /// let sql = "DELIMITER $$
 /// CREATE FUNCTION add_func3(IN a INT, IN b INT, OUT c INT) RETURNS INT
 /// BEGIN
@@ -677,7 +677,7 @@ impl Spanned for TriggerEvent {
 /// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTrigger, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
-///
+/// #
 /// let sql = "DROP TRIGGER IF EXISTS `my_trigger`;
 /// DELIMITER $$
 /// CREATE TRIGGER `my_trigger` AFTER DELETE ON `things` FOR EACH ROW BEGIN

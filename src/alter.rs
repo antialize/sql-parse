@@ -496,7 +496,7 @@ fn parse_add_alter_specification<'a, 'b>(
 /// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, AlterTable, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
-///
+/// #
 /// let sql = "ALTER TABLE `t1`
 ///     MODIFY `id` int(11) NOT NULL AUTO_INCREMENT,
 ///     ADD CONSTRAINT `t1_t2` FOREIGN KEY (`two`) REFERENCES `t2` (`id`);";
