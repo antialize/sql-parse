@@ -19,12 +19,36 @@ use crate::{
     Identifier, Span, Spanned, Statement,
 };
 
+/// Represent a drop table statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTable, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP TABLE `Employees`, `Customers`;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let delete: DropTable = match stmts.pop() {
+///     Some(Statement::DropTable(d)) => d,
+///     _ => panic!("We should get a drop table statement")
+/// };
+///
+/// assert!(delete.tables.get(0).unwrap().as_str() == "Employees");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DropTable<'a> {
+    /// Span of "DROP"
     pub drop_span: Span,
+    /// Span of "TEMPORARY" if specified
     pub temporary: Option<Span>,
+    /// Span of "TABLE"
     pub table_span: Span,
+    /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
+    /// List of tables to drops
     pub tables: Vec<Identifier<'a>>,
 }
 
@@ -38,12 +62,36 @@ impl<'a> Spanned for DropTable<'a> {
     }
 }
 
+/// Represent a drop view statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropView, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP VIEW `Employees`, `Customers`;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let delete: DropView = match stmts.pop() {
+///     Some(Statement::DropView(d)) => d,
+///     _ => panic!("We should get a drop table statement")
+/// };
+///
+/// assert!(delete.views.get(0).unwrap().as_str() == "Employees");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DropView<'a> {
+    /// Span of "DROP"
     pub drop_span: Span,
+    /// Span of "TEMPORARY" if specified
     pub temporary: Option<Span>,
+    /// Span of "VIEW"
     pub view_span: Span,
+    /// Span of "IF EXISTS"
     pub if_exists: Option<Span>,
+    /// List of views to drop
     pub views: Vec<Identifier<'a>>,
 }
 
@@ -57,11 +105,34 @@ impl<'a> Spanned for DropView<'a> {
     }
 }
 
+/// Represent a drop database statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropDatabase, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP DATABASE mydb;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: DropDatabase = match stmts.pop() {
+///     Some(Statement::DropDatabase(s)) => s,
+///     _ => panic!("We should get a drop database statement")
+/// };
+///
+/// assert!(s.database.as_str() == "mydb");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DropDatabase<'a> {
+    /// Span of "DROP"
     pub drop_span: Span,
+    /// Span of "DATABASE"
     pub database_span: Span,
+    /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
+    /// Name of database to drop
     pub database: Identifier<'a>,
 }
 
@@ -74,11 +145,34 @@ impl<'a> Spanned for DropDatabase<'a> {
     }
 }
 
+/// Represent a drop event statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropEvent, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP EVENT myevent;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: DropEvent = match stmts.pop() {
+///     Some(Statement::DropEvent(s)) => s,
+///     _ => panic!("We should get a drop event statement")
+/// };
+///
+/// assert!(s.event.as_str() == "myevent");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DropEvent<'a> {
+    /// Span of "DROP"
     pub drop_span: Span,
+    /// Span of "EVENT"
     pub event_span: Span,
+    /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
+    /// Event to drop
     pub event: Identifier<'a>,
 }
 
@@ -91,11 +185,34 @@ impl<'a> Spanned for DropEvent<'a> {
     }
 }
 
+/// Represent a drop function statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropFunction, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP FUNCTION myfunc;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: DropFunction = match stmts.pop() {
+///     Some(Statement::DropFunction(s)) => s,
+///     _ => panic!("We should get a drop function statement")
+/// };
+///
+/// assert!(s.function.as_str() == "myfunc");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DropFunction<'a> {
+    /// Span of "DROP"
     pub drop_span: Span,
+    /// Span of "FUNCTION"
     pub function_span: Span,
+    /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
+    /// Function to drop
     pub function: Identifier<'a>,
 }
 
@@ -108,11 +225,34 @@ impl<'a> Spanned for DropFunction<'a> {
     }
 }
 
+/// Represent a drop procedure statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropProcedure, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP PROCEDURE myproc;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: DropProcedure = match stmts.pop() {
+///     Some(Statement::DropProcedure(s)) => s,
+///     _ => panic!("We should get a drop procedure statement")
+/// };
+///
+/// assert!(s.procedure.as_str() == "myproc");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DropProcedure<'a> {
+    /// Span of "DROP"
     pub drop_span: Span,
+    /// Span of "PROCEDURE"
     pub procedure_span: Span,
+    /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
+    /// Procedure to drop
     pub procedure: Identifier<'a>,
 }
 
@@ -125,11 +265,34 @@ impl<'a> Spanned for DropProcedure<'a> {
     }
 }
 
+/// Represent a drop server statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropServer, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP SERVER myserver;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: DropServer = match stmts.pop() {
+///     Some(Statement::DropServer(s)) => s,
+///     _ => panic!("We should get a drop server statement")
+/// };
+///
+/// assert!(s.server.as_str() == "myserver");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DropServer<'a> {
+    /// Span of "DROP"
     pub drop_span: Span,
+    /// Span of "SERVER"
     pub server_span: Span,
+    /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
+    /// Server to drop
     pub server: Identifier<'a>,
 }
 
@@ -142,12 +305,36 @@ impl<'a> Spanned for DropServer<'a> {
     }
 }
 
+/// Represent a drop trigger statement
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTrigger, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP TRIGGER IF EXISTS `foo`.`mytrigger`;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: DropTrigger = match stmts.pop() {
+///     Some(Statement::DropTrigger(s)) => s,
+///     _ => panic!("We should get a drop trigger statement")
+/// };
+///
+/// assert!(s.trigger.as_str() == "mytrigger");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DropTrigger<'a> {
+    /// Span of "DROP"
     pub drop_span: Span,
+    /// Span of "TRIGGER"
     pub trigger_span: Span,
+    /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
+    /// Schema identifier if specified
     pub schema: Option<Identifier<'a>>,
+    /// Trigger to drop
     pub trigger: Identifier<'a>,
 }
 
@@ -284,7 +471,7 @@ pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statemen
                 None
             };
             let n1 = parser.consume_plain_identifier()?;
-            let (schema, trigger) = if parser.skip_token(Token::Comma).is_some() {
+            let (schema, trigger) = if parser.skip_token(Token::Period).is_some() {
                 (Some(n1), parser.consume_plain_identifier()?)
             } else {
                 (None, n1)
