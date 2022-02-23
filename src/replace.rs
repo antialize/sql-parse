@@ -22,6 +22,7 @@ use crate::{
     Identifier, Issue, OptSpanned, Span, Spanned,
 };
 
+/// Flags for replace
 #[derive(Clone, Debug)]
 pub enum ReplaceFlag {
     LowPriority(Span),
@@ -37,15 +38,43 @@ impl<'a> Spanned for ReplaceFlag {
     }
 }
 
+/// Representation of replace Statement
+///
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Replace, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "REPLACE INTO t2 VALUES (1,'Leopard'),(2,'Dog')";
+/// let stmt = parse_statement(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let r: Replace = match stmt {
+///     Some(Statement::Replace(r)) => r,
+///     _ => panic!("We should get an replace statement")
+/// };
+///
+/// assert!(r.table[0].as_str() == "t2");
+/// println!("{:#?}", r.values.unwrap())
+/// ```
 #[derive(Clone, Debug)]
 pub struct Replace<'a> {
+    /// Span of "REPLACE"
     pub replace_span: Span,
+    /// Flags specified after "REPLACE"
     pub flags: Vec<ReplaceFlag>,
+    /// Span of "INTO" if specified
     pub into_span: Option<Span>,
+    /// Table to replace into
     pub table: Vec<Identifier<'a>>,
+    /// List of columns to put values into
     pub columns: Vec<Identifier<'a>>,
+    /// Span of "VALUES" and values to put into columns if specified
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
+    /// Select expression to put into columns if specified
     pub select: Option<Select<'a>>,
+    /// Span of "SET" and list of key, value pairs to set if specified
     pub set: Option<(Span, Vec<(Identifier<'a>, Expression<'a>)>)>,
 }
 

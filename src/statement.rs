@@ -98,11 +98,16 @@ fn parse_block<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<Statement<'a>>
     Ok(ans)
 }
 
+/// Condition in if statement
 #[derive(Clone, Debug)]
 pub struct IfCondition<'a> {
+    /// Span of "ELSEIF" if specified
     pub elseif_span: Option<Span>,
+    /// Expression that must be true for `then` to be executed
     pub search_condition: Expression<'a>,
+    /// Span of "THEN"
     pub then_span: Span,
+    /// List of statement to be executed if `search_condition` is true
     pub then: Vec<Statement<'a>>,
 }
 
@@ -116,11 +121,16 @@ impl<'a> Spanned for IfCondition<'a> {
     }
 }
 
+/// If statement
 #[derive(Clone, Debug)]
 pub struct If<'a> {
+    /// Span of "IF"
     pub if_span: Span,
+    // List of if a then v parts
     pub conditions: Vec<IfCondition<'a>>,
+    /// Span of "ELSE" and else Statement if specified
     pub else_: Option<(Span, Vec<Statement<'a>>)>,
+    /// Span of "ENDIF"
     pub endif_span: Span,
 }
 
@@ -180,6 +190,7 @@ fn parse_if<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<If<'a>, ParseError> {
     })
 }
 
+/// SQL statement
 #[derive(Clone, Debug)]
 pub enum Statement<'a> {
     CreateTable(CreateTable<'a>),
@@ -202,6 +213,7 @@ pub enum Statement<'a> {
     AlterTable(AlterTable<'a>),
     Block(Vec<Statement<'a>>), //TODO we should include begin and end
     If(If<'a>),
+    /// Invalid statement produced after recovering from parse error
     Invalid(Span),
     Union(Union<'a>),
     Replace(Replace<'a>),
@@ -259,11 +271,16 @@ pub(crate) fn parse_statement<'a, 'b>(
     })
 }
 
+/// When part of case statement
 #[derive(Clone, Debug)]
 pub struct WhenStatement<'a> {
+    /// Span of "WHEN"
     pub when_span: Span,
+    /// Expression who's match yields execution `then`
     pub when: Expression<'a>,
+    /// Span of "THEN"
     pub then_span: Span,
+    /// Statements to execute if `when` matches
     pub then: Vec<Statement<'a>>,
 }
 
@@ -276,12 +293,18 @@ impl<'a> Spanned for WhenStatement<'a> {
     }
 }
 
+/// Case statement
 #[derive(Clone, Debug)]
 pub struct CaseStatement<'a> {
+    /// Span of "CASE"
     pub case_span: Span,
+    /// Value to match against
     pub value: Box<Expression<'a>>,
+    /// List of whens
     pub whens: Vec<WhenStatement<'a>>,
+    /// Span of "ELSE" and statement to execute if specified
     pub else_: Option<(Span, Vec<Statement<'a>>)>,
+    /// Span of "END"
     pub end_span: Span,
 }
 
@@ -357,6 +380,7 @@ pub(crate) fn parse_compound_query_bottom<'a, 'b>(
     }
 }
 
+/// Type of union to perform
 #[derive(Clone, Debug)]
 pub enum UnionType {
     All(Span),
@@ -374,10 +398,14 @@ impl OptSpanned for UnionType {
     }
 }
 
+/// Right hand side of a union expression
 #[derive(Clone, Debug)]
 pub struct UnionWith<'a> {
+    /// Span of "UNION"
     pub union_span: Span,
+    /// Type of union to perform
     pub union_type: UnionType,
+    /// Statement to union
     pub union_statement: Box<Statement<'a>>,
 }
 
@@ -389,11 +417,16 @@ impl<'a> Spanned for UnionWith<'a> {
     }
 }
 
+/// Union statement
 #[derive(Clone, Debug)]
 pub struct Union<'a> {
+    /// Left side of union
     pub left: Box<Statement<'a>>,
+    /// List of things to union
     pub with: Vec<UnionWith<'a>>,
+    /// Span of "ORDER BY", and list of ordering expressions and directions if specified
     pub order_by: Option<(Span, Vec<(Expression<'a>, OrderFlag)>)>,
+    /// Span of "LIMIT", offset and count expressions if specified
     pub limit: Option<(Span, Option<Expression<'a>>, Expression<'a>)>,
 }
 

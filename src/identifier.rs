@@ -12,17 +12,23 @@
 
 use crate::{Span, Spanned};
 
+/// Simple identifier in code
+/// it derefs to its string value
 #[derive(Clone, Debug)]
 pub struct Identifier<'a> {
+    /// Identifier string
     pub value: &'a str,
+    /// Span of the value
     pub span: Span,
 }
 
 impl<'a> Identifier<'a> {
+    /// Produce new identifier given value and span
     pub fn new(value: &'a str, span: Span) -> Self {
         Identifier { value, span }
     }
 
+    /// Get the string representation of the identifier
     pub fn as_str(&self) -> &'a str {
         self.value
     }

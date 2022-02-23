@@ -23,6 +23,7 @@ use alloc::string::ToString;
 use alloc::vec;
 use alloc::{boxed::Box, vec::Vec};
 
+/// Function to execute
 #[derive(Debug, Clone)]
 pub enum Function<'a> {
     Abs,
@@ -200,6 +201,7 @@ pub enum Function<'a> {
     Other(&'a str),
 }
 
+/// Binary operator to apply
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOperator {
     Or,
@@ -227,6 +229,7 @@ pub enum BinaryOperator {
     NotLike,
 }
 
+/// Type of is expression
 #[derive(Debug, Clone, Copy)]
 pub enum Is {
     Null,
@@ -239,6 +242,7 @@ pub enum Is {
     NotUnknown,
 }
 
+/// Unary operator to apply
 #[derive(Debug, Clone, Copy)]
 pub enum UnaryOperator {
     Binary,
@@ -248,6 +252,7 @@ pub enum UnaryOperator {
     Not,
 }
 
+/// Part of a full identifier
 #[derive(Debug, Clone)]
 pub enum IdentifierPart<'a> {
     Name(Identifier<'a>),
@@ -263,11 +268,16 @@ impl<'a> Spanned for IdentifierPart<'a> {
     }
 }
 
+/// When part of CASE
 #[derive(Debug, Clone)]
 pub struct When<'a> {
+    /// Span of WHEN
     pub when_span: Span,
+    /// When to return then
     pub when: Expression<'a>,
+    /// Span of THEN
     pub then_span: Span,
+    /// What to return when when applyes
     pub then: Expression<'a>,
 }
 
@@ -318,33 +328,58 @@ pub enum Expression<'a> {
     Float((f64, Span)),
     /// Function call expression,
     Function(Function<'a>, Vec<Expression<'a>>, Span),
+    /// Identifier pointing to column
     Identifier(Vec<IdentifierPart<'a>>),
+    /// Input argument to query, the first argument is the occurrence number of the argumnet
     Arg((usize, Span)),
+    /// Exists expression
     Exists(Box<Select<'a>>),
+    /// In expression
     In {
+        /// Left hand side expression
         lhs: Box<Expression<'a>>,
+        /// Right hand side expression
         rhs: Vec<Expression<'a>>,
+        /// Span of "IN" or "NOT IN"
         in_span: Span,
+        /// True if not in
         not_in: bool,
     },
+    /// Is expression
     Is(Box<Expression<'a>>, Is, Span),
+    /// Invalid expression, returned on recovery of a parse error
     Invalid(Span),
+    /// Case expression
     Case {
+        /// Span of "CASE"
         case_span: Span,
+        /// Optional value to switch over
         value: Option<Box<Expression<'a>>>,
+        /// When parts
         whens: Vec<When<'a>>,
+        /// Span of "ELSE" and else value if specified
         else_: Option<(Span, Box<Expression<'a>>)>,
+        /// Span of "END"
         end_span: Span,
     },
+    /// Cast expression
     Cast {
+        /// Span of "CAST"
         cast_span: Span,
+        /// Value to cast
         expr: Box<Expression<'a>>,
+        /// Span of "AS"
         as_span: Span,
+        /// Type to cast to
         type_: DataType<'a>,
     },
+    /// Count expression
     Count {
+        /// Span of "COUNT"
         count_span: Span,
+        /// Span of "DISTINCT" if specified
         distinct_span: Option<Span>,
+        /// Expression to count
         expr: Box<Expression<'a>>,
     },
 }

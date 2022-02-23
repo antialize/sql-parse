@@ -22,6 +22,7 @@ use crate::{
     Identifier, Span, Spanned,
 };
 
+/// Flags for insert
 #[derive(Clone, Debug)]
 pub enum InsertFlag {
     LowPriority(Span),
@@ -41,14 +42,43 @@ impl Spanned for InsertFlag {
     }
 }
 
+/// Representation of Insert Statement
+///
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Insert, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql1 = "INSERT INTO person (first_name, last_name) VALUES ('John', 'Doe')";
+/// let stmt1 = parse_statement(sql1, &mut issues, &options);
+/// let sql2 = "INSERT INTO contractor SELECT * FROM person WHERE status = 'c'";
+/// let stmt2 = parse_statement(sql1, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let i: Insert = match stmt1 {
+///     Some(Statement::Insert(i)) => i,
+///     _ => panic!("We should get an insert statement")
+/// };
+///
+/// assert!(i.table[0].as_str() == "person");
+/// println!("{:#?}", i.values.unwrap())
+/// ```
 #[derive(Clone, Debug)]
 pub struct Insert<'a> {
+    /// Span of "INSERT"
     pub insert_span: Span,
+    /// Flags specified after "INSERT"
     pub flags: Vec<InsertFlag>,
+    /// Span of "INTO" if specified
     pub into_span: Option<Span>,
+    /// Table to insert into
     pub table: Vec<Identifier<'a>>,
+    /// List of columns to set
     pub columns: Vec<Identifier<'a>>,
+    /// Span of values "VALUES" and list of tuples to insert if specified
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
+    /// Select statement to insert if specified
     pub select: Option<Select<'a>>,
 }
 

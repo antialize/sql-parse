@@ -67,6 +67,7 @@ impl<'a> Spanned for DataTypeProperty<'a> {
     }
 }
 
+/// Type of datatype
 #[derive(Debug, Clone)]
 pub enum Type<'a> {
     TinyInt(Option<(usize, Span)>),
@@ -122,10 +123,14 @@ impl<'a> OptSpanned for Type<'a> {
     }
 }
 
+/// Type of data
 #[derive(Debug, Clone)]
 pub struct DataType<'a> {
+    /// Span of type_ identifier
     pub identifier: Span,
+    /// Type with width
     pub type_: Type<'a>,
+    /// Properties on type
     pub properties: Vec<DataTypeProperty<'a>>,
 }
 

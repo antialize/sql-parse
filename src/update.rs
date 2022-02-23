@@ -23,6 +23,7 @@ use crate::{
     Identifier, Span, Spanned,
 };
 
+/// Flags specified after "UPDATE"
 #[derive(Clone, Debug)]
 pub enum UpdateFlag {
     LowPriority(Span),
@@ -38,13 +39,38 @@ impl Spanned for UpdateFlag {
     }
 }
 
+/// Representation of replace Statement
+///
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Update, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "UPDATE tab1, tab2 SET tab1.column1 = value1, tab1.column2 = value2 WHERE tab1.id = tab2.id";
+/// let stmt = parse_statement(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let u: Update = match stmt {
+///     Some(Statement::Update(u)) => u,
+///     _ => panic!("We should get an update statement")
+/// };
+///
+/// println!("{:#?}", u.where_.unwrap())
+/// ```
 #[derive(Clone, Debug)]
 pub struct Update<'a> {
+    /// Span of "UPDATE"
     pub update_span: Span,
+    /// Flags specified after "UPDATE"
     pub flags: Vec<UpdateFlag>,
+    /// List of tables to update
     pub tables: Vec<TableReference<'a>>,
+    /// Span of "SET"
     pub set_span: Span,
+    /// List of key,value pairs to set
     pub set: Vec<(Vec<Identifier<'a>>, Expression<'a>)>,
+    /// Where expression and span of "WHERE" if specified
     pub where_: Option<(Expression<'a>, Span)>,
 }
 

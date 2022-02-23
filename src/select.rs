@@ -23,9 +23,12 @@ use crate::{
     Identifier, Span, Spanned, Statement,
 };
 
+/// Value in select
 #[derive(Debug, Clone)]
 pub struct SelectExpr<'a> {
+    /// Value to select
     pub expr: Expression<'a>,
+    /// Optional name to give value if specified
     pub as_: Option<Identifier<'a>>,
 }
 
@@ -47,9 +50,12 @@ pub(crate) fn parse_select_expr<'a, 'b>(
     Ok(SelectExpr { expr, as_ })
 }
 
+/// Specification for join
 #[derive(Debug, Clone)]
 pub enum JoinSpecification<'a> {
+    /// On specification expression and span of "ON"
     On(Expression<'a>, Span),
+    /// List of columns to joint using, and span of "USING"
     Using(Vec<Identifier<'a>>, Span),
 }
 
@@ -62,6 +68,7 @@ impl<'a> Spanned for JoinSpecification<'a> {
     }
 }
 
+/// Type of join
 #[derive(Debug, Clone)]
 pub enum JoinType {
     Inner(Span),
@@ -92,23 +99,37 @@ impl Spanned for JoinType {
     }
 }
 
+/// Reference to table in select
 #[derive(Debug, Clone)]
 pub enum TableReference<'a> {
+    /// Reference to a table or view
     Table {
+        /// Name of table to to select from
         identifier: Vec<Identifier<'a>>,
+        /// Span of "AS" if specified
         as_span: Option<Span>,
+        /// Alias for table if specified
         as_: Option<Identifier<'a>>,
     },
+    /// Subquery
     Query {
+        /// Query yielding table
         query: Box<Statement<'a>>,
+        /// Span of "AS" if specified
         as_span: Option<Span>,
+        /// Alias for table if specified
         as_: Option<Identifier<'a>>,
         //TODO collist
     },
+    /// Join
     Join {
+        /// What type of join is it
         join: JoinType,
+        /// Left hand side of join
         left: Box<TableReference<'a>>,
+        /// Right hand side of join
         right: Box<TableReference<'a>>,
+        /// How to do the join if specified
         specification: Option<JoinSpecification<'a>>,
     },
 }
@@ -332,6 +353,7 @@ pub(crate) fn parse_table_reference<'a, 'b>(
     Ok(ans)
 }
 
+/// Flags specified after SELECT
 #[derive(Debug, Clone)]
 pub enum SelectFlag {
     All(Span),
@@ -363,6 +385,7 @@ impl<'a> Spanned for SelectFlag {
     }
 }
 
+/// Ordering direction
 #[derive(Debug, Clone)]
 pub enum OrderFlag {
     Asc(Span),
@@ -379,18 +402,48 @@ impl OptSpanned for OrderFlag {
     }
 }
 
+/// Representation of select Statement
+///
+/// ```
+/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Select, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "SELECT f1,f2 FROM t1 WHERE f3<=10 AND f4='y'";
+/// let stmt = parse_statement(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: Select = match stmt {
+///     Some(Statement::Select(s)) => s,
+///     _ => panic!("We should get an select statement")
+/// };
+///
+/// println!("{:#?}", s.where_)
+/// ```
 #[derive(Debug, Clone)]
 pub struct Select<'a> {
+    /// Span of "SELECT"
     pub select_span: Span,
+    /// Flags specified after "SELECT"
     pub flags: Vec<SelectFlag>,
+    /// List of values to select
     pub select_exprs: Vec<SelectExpr<'a>>,
+    /// Span of "FROM"
     pub from_span: Option<Span>,
+    /// List of tables to select from
     pub table_references: Option<Vec<TableReference<'a>>>,
+    /// Where expression and span of "WHERE" if specified
     pub where_: Option<(Expression<'a>, Span)>,
+    /// Span of "GROUP_BY" and group expression if specified
     pub group_by: Option<(Span, Vec<Expression<'a>>)>,
+    /// Span of having if specified
     pub having_span: Option<Span>,
+    /// Span of window if specified
     pub window_span: Option<Span>,
+    /// Span of "ORDER BY" and list of order expression and directions, if specified
     pub order_by: Option<(Span, Vec<(Expression<'a>, OrderFlag)>)>,
+    /// Span of "LIMIT", offset and count expressions if specified
     pub limit: Option<(Span, Option<Expression<'a>>, Expression<'a>)>,
 }
 impl<'a> Spanned for Select<'a> {
