@@ -21,7 +21,7 @@ use crate::{
 
 /// Represent a drop table statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTable, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTable, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -64,7 +64,7 @@ impl<'a> Spanned for DropTable<'a> {
 
 /// Represent a drop view statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropView, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropView, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -107,7 +107,7 @@ impl<'a> Spanned for DropView<'a> {
 
 /// Represent a drop database statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropDatabase, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropDatabase, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -147,7 +147,7 @@ impl<'a> Spanned for DropDatabase<'a> {
 
 /// Represent a drop event statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropEvent, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropEvent, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -187,7 +187,7 @@ impl<'a> Spanned for DropEvent<'a> {
 
 /// Represent a drop function statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropFunction, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropFunction, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -227,7 +227,7 @@ impl<'a> Spanned for DropFunction<'a> {
 
 /// Represent a drop procedure statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropProcedure, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropProcedure, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -267,7 +267,7 @@ impl<'a> Spanned for DropProcedure<'a> {
 
 /// Represent a drop server statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropServer, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropServer, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -307,7 +307,7 @@ impl<'a> Spanned for DropServer<'a> {
 
 /// Represent a drop trigger statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTrigger, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTrigger, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #

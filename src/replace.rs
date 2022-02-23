@@ -41,7 +41,7 @@ impl<'a> Spanned for ReplaceFlag {
 /// Representation of replace Statement
 ///
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Replace, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Replace, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #

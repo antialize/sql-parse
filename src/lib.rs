@@ -10,16 +10,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Parse SQL into an RST
-//!
-//! Example code:
+//! Parse SQL into an AST
 //!
 //! This crate provides an lexer and parser that can parse SQL
 //! into an Abstract Syntax Tree (AST). Currently primarily focused
 //! on MariaDB/Mysql.
 //!
+//! Example code:
+//!
 //! ```
-//! use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statement};
+//! use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement};
 //!
 //! let options = ParseOptions::new()
 //!     .dialect(SQLDialect::MariaDB)

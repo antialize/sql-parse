@@ -493,7 +493,7 @@ fn parse_add_alter_specification<'a, 'b>(
 
 /// Represent an alter table statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, AlterTable, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, AlterTable, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #

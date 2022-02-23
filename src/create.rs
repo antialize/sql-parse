@@ -235,7 +235,7 @@ impl<'a> Spanned for CreateOption<'a> {
 
 /// Represent a create table statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTable, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTable, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -292,7 +292,7 @@ impl<'a> Spanned for CreateTable<'a> {
 
 /// Represent a create view statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateView, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateView, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -450,7 +450,7 @@ impl Spanned for FunctionParamDirection {
 /// This is not fully implemented yet
 ///
 /// ```ignore
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateFunction, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateFunction, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -674,7 +674,7 @@ impl Spanned for TriggerEvent {
 
 /// Represent a create trigger statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTrigger, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTrigger, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #

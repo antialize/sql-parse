@@ -1,7 +1,8 @@
 [package]
-name = "sql-ast"
+name = "sql-parse"
 version = "0.1.0"
 edition = "2021"
 authors = ["Jakob Truelsen <antialize@gmail.com>"]
 keywords = [ "mysql", "sql", "lexer", "parser" ]
 license = "Apache-2.0"
+readme = "README.md"

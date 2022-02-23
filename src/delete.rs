@@ -41,7 +41,7 @@ impl Spanned for DeleteFlag {
 
 /// Represent a delete statement
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statements, Delete, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, Delete, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #

@@ -45,7 +45,7 @@ impl Spanned for InsertFlag {
 /// Representation of Insert Statement
 ///
 /// ```
-/// # use sql_ast::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Insert, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Insert, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
