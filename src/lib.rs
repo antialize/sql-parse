@@ -168,7 +168,7 @@ impl ParseOptions {
 macro_rules! issue_ice {
     ( $spanned:expr ) => {{
         Issue::err(
-            format!("Internal compiler error in {}:{}", file!(), line!()),
+            alloc::format!("Internal compiler error in {}:{}", file!(), line!()),
             $spanned,
         )
     }};
@@ -179,7 +179,7 @@ macro_rules! issue_ice {
 macro_rules! issue_todo {
     ( $spanned:expr ) => {{
         Issue::err(
-            format!("Not yet implemented {}:{}", file!(), line!()),
+            alloc::format!("Not yet implemented {}:{}", file!(), line!()),
             $spanned,
         )
     }};
