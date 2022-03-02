@@ -18,33 +18,48 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
-    Identifier, Span, Spanned, OptSpanned, Issue,
+    Identifier, Issue, OptSpanned, Span, Spanned,
 };
 
 /// Flags for insert
 #[derive(Clone, Debug)]
-pub enum InsertFlag {
+pub enum InsertReplaceFlag {
     LowPriority(Span),
     HighPriority(Span),
     Delayed(Span),
     Ignore(Span),
 }
 
-impl Spanned for InsertFlag {
+impl Spanned for InsertReplaceFlag {
     fn span(&self) -> Span {
         match &self {
-            InsertFlag::LowPriority(v) => v.span(),
-            InsertFlag::HighPriority(v) => v.span(),
-            InsertFlag::Delayed(v) => v.span(),
-            InsertFlag::Ignore(v) => v.span(),
+            InsertReplaceFlag::LowPriority(v) => v.span(),
+            InsertReplaceFlag::HighPriority(v) => v.span(),
+            InsertReplaceFlag::Delayed(v) => v.span(),
+            InsertReplaceFlag::Ignore(v) => v.span(),
         }
     }
 }
 
-/// Representation of Insert Statement
+#[derive(Clone, Debug)]
+pub enum InsertReplaceType {
+    Insert(Span),
+    Replace(Span),
+}
+
+impl Spanned for InsertReplaceType {
+    fn span(&self) -> Span {
+        match self {
+            InsertReplaceType::Insert(a) => a.clone(),
+            InsertReplaceType::Replace(a) => a.clone(),
+        }
+    }
+}
+
+/// Representation of Insert or Replace Statement
 ///
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Insert, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, InsertReplace, InsertReplaceType, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
 /// #
@@ -58,20 +73,37 @@ impl Spanned for InsertFlag {
 ///
 /// # assert!(issues.is_empty());
 /// #
-/// let i: Insert = match stmt1 {
-///     Some(Statement::Insert(i)) => i,
+/// let i: InsertReplace = match stmt1 {
+///     Some(Statement::InsertReplace(
+///         i @ InsertReplace{type_: InsertReplaceType::Insert(_), ..})) => i,
 ///     _ => panic!("We should get an insert statement")
 /// };
 ///
 /// assert!(i.table[0].as_str() == "person");
-/// println!("{:#?}", i.values.unwrap())
+/// println!("{:#?}", i.values.unwrap());
+///
+///
+/// let sql = "REPLACE INTO t2 VALUES (1,'Leopard'),(2,'Dog')";
+/// let stmt = parse_statement(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let r: InsertReplace = match stmt {
+///     Some(Statement::InsertReplace(
+///         r @ InsertReplace{type_: InsertReplaceType::Replace(_), ..})) => r,
+///     _ => panic!("We should get an replace statement")
+/// };
+///
+/// assert!(r.table[0].as_str() == "t2");
+/// println!("{:#?}", r.values.unwrap());
+///
 /// ```
 #[derive(Clone, Debug)]
-pub struct Insert<'a> {
-    /// Span of "INSERT"
-    pub insert_span: Span,
+pub struct InsertReplace<'a> {
+    /// Span of "INSERT" or "REPLACE"
+    pub type_: InsertReplaceType,
     /// Flags specified after "INSERT"
-    pub flags: Vec<InsertFlag>,
+    pub flags: Vec<InsertReplaceFlag>,
     /// Span of "INTO" if specified
     pub into_span: Option<Span>,
     /// Table to insert into
@@ -83,45 +115,76 @@ pub struct Insert<'a> {
     /// Select statement to insert if specified
     pub select: Option<Select<'a>>,
     /// Span of "SET" and list of key, value pairs to set if specified
-    pub set: Option<(Span, Vec<(Identifier<'a>, Expression<'a>)>)>,
+    pub set: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
     /// Updates to execute on duplicate key
     pub on_duplicate_key_update: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
 }
 
-impl<'a> Spanned for Insert<'a> {
+impl<'a> Spanned for InsertReplace<'a> {
     fn span(&self) -> Span {
-        self.insert_span
+        self.type_
             .join_span(&self.flags)
             .join_span(&self.into_span)
             .join_span(&self.table)
             .join_span(&self.values)
             .join_span(&self.select)
+            .join_span(&self.set)
+            .join_span(&self.on_duplicate_key_update)
     }
 }
 
-pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert<'a>, ParseError> {
-    let insert_span = parser.consume_keyword(Keyword::INSERT)?;
-    let mut flags = Vec::new();
+pub(crate) fn parse_insert_replace<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<InsertReplace<'a>, ParseError> {
+    let type_ = match &parser.token {
+        Token::Ident(_, Keyword::INSERT) => InsertReplaceType::Insert(parser.consume()),
+        Token::Ident(_, Keyword::REPLACE) => InsertReplaceType::Replace(parser.consume()),
+        _ => parser.expected_failure("INSERT or REPLACE")?,
+    };
 
+    let insert = matches!(type_, InsertReplaceType::Insert(_));
+
+    let mut flags = Vec::new();
     loop {
         match &parser.token {
-            Token::Ident(_, Keyword::LOW_PRIORITY) => flags.push(InsertFlag::LowPriority(
+            Token::Ident(_, Keyword::LOW_PRIORITY) => flags.push(InsertReplaceFlag::LowPriority(
                 parser.consume_keyword(Keyword::LOW_PRIORITY)?,
             )),
-            Token::Ident(_, Keyword::HIGH_PRIORITY) => flags.push(InsertFlag::HighPriority(
+            Token::Ident(_, Keyword::HIGH_PRIORITY) => flags.push(InsertReplaceFlag::HighPriority(
                 parser.consume_keyword(Keyword::HIGH_PRIORITY)?,
             )),
-            Token::Ident(_, Keyword::DELAYED) => flags.push(InsertFlag::Delayed(
+            Token::Ident(_, Keyword::DELAYED) => flags.push(InsertReplaceFlag::Delayed(
                 parser.consume_keyword(Keyword::DELAYED)?,
             )),
-            Token::Ident(_, Keyword::IGNORE) => {
-                flags.push(InsertFlag::Ignore(parser.consume_keyword(Keyword::IGNORE)?))
-            }
+            Token::Ident(_, Keyword::IGNORE) => flags.push(InsertReplaceFlag::Ignore(
+                parser.consume_keyword(Keyword::IGNORE)?,
+            )),
             _ => break,
         }
     }
-    let into_span = parser.skip_keyword(Keyword::INTO);
 
+    for flag in &flags {
+        match flag {
+            InsertReplaceFlag::LowPriority(_) => {}
+            InsertReplaceFlag::HighPriority(s) => {
+                if insert {
+                    parser
+                        .issues
+                        .push(Issue::err("Not supported for replace", s));
+                }
+            }
+            InsertReplaceFlag::Delayed(_) => {}
+            InsertReplaceFlag::Ignore(s) => {
+                if insert {
+                    parser
+                        .issues
+                        .push(Issue::err("Not supported for replace", s));
+                }
+            }
+        }
+    }
+
+    let into_span = parser.skip_keyword(Keyword::INTO);
     let mut table = vec![parser.consume_plain_identifier()?];
     loop {
         if parser.skip_token(Token::Period).is_none() {
@@ -154,35 +217,35 @@ pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert
         }
         Token::Ident(_, Keyword::VALUE | Keyword::VALUES) => {
             let values_span = parser.consume();
-           let mut values_items = Vec::new();
-           loop {
-               let mut vals = Vec::new();
-               parser.consume_token(Token::LParen)?;
-               parser.recovered(")", &|t| t == &Token::RParen, |parser| {
-                   loop {
-                       vals.push(parse_expression(parser, false)?);
-                       if parser.skip_token(Token::Comma).is_none() {
-                           break;
-                       }
-                   }
-                   Ok(())
-               })?;
-               parser.consume_token(Token::RParen)?;
-               values_items.push(vals);
-               if parser.skip_token(Token::Comma).is_none() {
-                   break;
-               }
-           }
-           values = Some((values_span, values_items));
+            let mut values_items = Vec::new();
+            loop {
+                let mut vals = Vec::new();
+                parser.consume_token(Token::LParen)?;
+                parser.recovered(")", &|t| t == &Token::RParen, |parser| {
+                    loop {
+                        vals.push(parse_expression(parser, false)?);
+                        if parser.skip_token(Token::Comma).is_none() {
+                            break;
+                        }
+                    }
+                    Ok(())
+                })?;
+                parser.consume_token(Token::RParen)?;
+                values_items.push(vals);
+                if parser.skip_token(Token::Comma).is_none() {
+                    break;
+                }
+            }
+            values = Some((values_span, values_items));
         }
         Token::Ident(_, Keyword::SET) => {
             let set_span = parser.consume_keyword(Keyword::SET)?;
             let mut kvps = Vec::new();
             loop {
                 let col = parser.consume_plain_identifier()?;
-                parser.consume_token(Token::Eq)?;
+                let eq_span = parser.consume_token(Token::Eq)?;
                 let val = parse_expression(parser, false)?;
-                kvps.push((col, val));
+                kvps.push((col, eq_span, val));
                 if parser.skip_token(Token::Comma).is_none() {
                     break;
                 }
@@ -196,10 +259,9 @@ pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert
             set = Some((set_span, kvps));
         }
         _ => {
-            parser.expected_error("Expected VALUE, VALUES, SELECT or SET");
+            parser.expected_error("VALUE, VALUES, SELECT or SET");
         }
     }
-
 
     let on_duplicate_key_update = if matches!(parser.token, Token::Ident(_, Keyword::ON)) {
         let on_duplicate_key_update_span = parser.consume_keywords(&[
@@ -225,9 +287,9 @@ pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert
 
     //  [RETURNING select_expr
     //       [, select_expr ...]]
-    Ok(Insert {
+    Ok(InsertReplace {
+        type_,
         flags,
-        insert_span,
         table,
         columns,
         into_span,

@@ -21,11 +21,10 @@ use crate::{
         DropTrigger, DropView,
     },
     expression::{parse_expression, Expression},
-    insert::{parse_insert, Insert},
+    insert_replace::{parse_insert_replace, InsertReplace},
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    replace::{parse_replace, Replace},
     select::{parse_select, OrderFlag, Select},
     span::OptSpanned,
     update::{parse_update, Update},
@@ -199,7 +198,7 @@ pub enum Statement<'a> {
     CreateFunction(CreateFunction<'a>),
     Select(Select<'a>),
     Delete(Delete<'a>),
-    Insert(Insert<'a>),
+    InsertReplace(InsertReplace<'a>),
     Update(Update<'a>),
     DropTable(DropTable<'a>),
     DropFunction(DropFunction<'a>),
@@ -216,7 +215,6 @@ pub enum Statement<'a> {
     /// Invalid statement produced after recovering from parse error
     Invalid(Span),
     Union(Union<'a>),
-    Replace(Replace<'a>),
     Case(CaseStatement<'a>),
 }
 
@@ -229,7 +227,7 @@ impl<'a> Spanned for Statement<'a> {
             Statement::CreateFunction(v) => v.span(),
             Statement::Select(v) => v.span(),
             Statement::Delete(v) => v.span(),
-            Statement::Insert(v) => v.span(),
+            Statement::InsertReplace(v) => v.span(),
             Statement::Update(v) => v.span(),
             Statement::DropTable(v) => v.span(),
             Statement::DropFunction(v) => v.span(),
@@ -245,7 +243,6 @@ impl<'a> Spanned for Statement<'a> {
             Statement::If(v) => v.span(),
             Statement::Invalid(v) => v.span(),
             Statement::Union(v) => v.span(),
-            Statement::Replace(v) => v.span(),
             Statement::Case(v) => v.span(),
         }
     }
@@ -259,13 +256,14 @@ pub(crate) fn parse_statement<'a, 'b>(
         Token::Ident(_, Keyword::DROP) => Some(parse_drop(parser)?),
         Token::Ident(_, Keyword::SELECT) | Token::LParen => Some(parse_compound_query(parser)?),
         Token::Ident(_, Keyword::DELETE) => Some(Statement::Delete(parse_delete(parser)?)),
-        Token::Ident(_, Keyword::INSERT) => Some(Statement::Insert(parse_insert(parser)?)),
+        Token::Ident(_, Keyword::INSERT | Keyword::REPLACE) => {
+            Some(Statement::InsertReplace(parse_insert_replace(parser)?))
+        }
         Token::Ident(_, Keyword::UPDATE) => Some(Statement::Update(parse_update(parser)?)),
         Token::Ident(_, Keyword::SET) => Some(Statement::Set(parse_set(parser)?)),
         Token::Ident(_, Keyword::BEGIN) => Some(Statement::Block(parse_block(parser)?)),
         Token::Ident(_, Keyword::IF) => Some(Statement::If(parse_if(parser)?)),
         Token::Ident(_, Keyword::ALTER) => Some(parse_alter(parser)?),
-        Token::Ident(_, Keyword::REPLACE) => Some(Statement::Replace(parse_replace(parser)?)),
         Token::Ident(_, Keyword::CASE) => Some(Statement::Case(parse_case_statement(parser)?)),
         _ => None,
     })

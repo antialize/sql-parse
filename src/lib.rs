@@ -53,12 +53,11 @@ mod delete;
 mod drop;
 mod expression;
 mod identifier;
-mod insert;
+mod insert_replace;
 mod issue;
 mod keywords;
 mod lexer;
 mod parser;
-mod replace;
 mod select;
 mod span;
 mod sstring;
@@ -88,8 +87,7 @@ pub use drop::{
 pub use expression::{
     BinaryOperator, Expression, Function, IdentifierPart, Is, UnaryOperator, When,
 };
-pub use insert::{Insert, InsertFlag};
-pub use replace::{Replace, ReplaceFlag};
+pub use insert_replace::{InsertReplace, InsertReplaceFlag, InsertReplaceType};
 pub use select::{JoinSpecification, JoinType, Select, SelectFlag, TableReference};
 pub use update::{Update, UpdateFlag};
 
