@@ -135,62 +135,62 @@ pub(crate) fn parse_replace<'a, 'b>(
     let mut select = None;
     let mut values = None;
     let mut set = None;
-    if matches!(parser.token, Token::Ident(_, Keyword::SET)) {
-        let set_span = parser.consume_keyword(Keyword::SET)?;
-        let mut kvps = Vec::new();
-        loop {
-            let col = parser.consume_plain_identifier()?;
-            parser.consume_token(Token::Eq)?;
-            let val = parse_expression(parser, false)?;
-            kvps.push((col, val));
-            if parser.skip_token(Token::Comma).is_none() {
-                break;
-            }
+    match &parser.token {
+        Token::Ident(_, Keyword::SELECT) => {
+            select = Some(parse_select(parser)?);
         }
-        if let Some(cs) = columns.opt_span() {
-            parser.issues.push(
-                Issue::err("Columns may not be used here", &cs)
-                    .frag("Together with SET", &set_span),
-            );
-        }
-        set = Some((set_span, kvps));
-    } else if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
-        select = Some(parse_select(parser)?);
-    } else {
-        let values_span = match &parser.token {
-            Token::Ident(_, Keyword::VALUE) => parser.consume_keyword(Keyword::VALUE)?,
-            Token::Ident(_, Keyword::VALUES) => parser.consume_keyword(Keyword::VALUES)?,
-            _ => parser.expected_failure("'VALUES'")?,
-        };
-
-        let mut values_items = Vec::new();
-        loop {
-            let mut vals = Vec::new();
-            parser.consume_token(Token::LParen)?;
-            parser.recovered(")", &|t| t == &Token::RParen, |parser| {
-                loop {
-                    vals.push(parse_expression(parser, false)?);
-                    if parser.skip_token(Token::Comma).is_none() {
-                        break;
+        Token::Ident(_, Keyword::VALUE | Keyword::VALUES) => {
+            let values_span = parser.consume();
+            let mut values_items = Vec::new();
+            loop {
+                let mut vals = Vec::new();
+                parser.consume_token(Token::LParen)?;
+                parser.recovered(")", &|t| t == &Token::RParen, |parser| {
+                    loop {
+                        vals.push(parse_expression(parser, false)?);
+                        if parser.skip_token(Token::Comma).is_none() {
+                            break;
+                        }
                     }
+                    Ok(())
+                })?;
+                parser.consume_token(Token::RParen)?;
+                values_items.push(vals);
+                if parser.skip_token(Token::Comma).is_none() {
+                    break;
                 }
-                Ok(())
-            })?;
-            parser.consume_token(Token::RParen)?;
-            values_items.push(vals);
-            if parser.skip_token(Token::Comma).is_none() {
-                break;
             }
+            values = Some((values_span, values_items));
         }
-
-        values = Some((values_span, values_items));
+        Token::Ident(_, Keyword::SET) => {
+            let set_span = parser.consume_keyword(Keyword::SET)?;
+            let mut kvps = Vec::new();
+            loop {
+                let col = parser.consume_plain_identifier()?;
+                parser.consume_token(Token::Eq)?;
+                let val = parse_expression(parser, false)?;
+                kvps.push((col, val));
+                if parser.skip_token(Token::Comma).is_none() {
+                    break;
+                }
+            }
+            if let Some(cs) = columns.opt_span() {
+                parser.issues.push(
+                    Issue::err("Columns may not be used here", &cs)
+                        .frag("Together with SET", &set_span),
+                );
+            }
+            set = Some((set_span, kvps));
+        }
+        _ => {
+            parser.expected_error("Expected VALUE, VALUES, SELECT or SET");
+        }
     }
 
     //  [ ON DUPLICATE KEY UPDATE
     //    col=expr
     //      [, col=expr] ... ] [RETURNING select_expr
     //       [, select_expr ...]]
-
     Ok(Replace {
         flags,
         replace_span,

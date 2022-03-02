@@ -18,7 +18,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
-    Identifier, Span, Spanned,
+    Identifier, Span, Spanned, OptSpanned, Issue,
 };
 
 /// Flags for insert
@@ -82,6 +82,8 @@ pub struct Insert<'a> {
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
     /// Select statement to insert if specified
     pub select: Option<Select<'a>>,
+    /// Span of "SET" and list of key, value pairs to set if specified
+    pub set: Option<(Span, Vec<(Identifier<'a>, Expression<'a>)>)>,
     /// Updates to execute on duplicate key
     pub on_duplicate_key_update: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
 }
@@ -145,37 +147,59 @@ pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert
 
     let mut select = None;
     let mut values = None;
-    if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
-        select = Some(parse_select(parser)?);
-    } else {
-        let values_span = match &parser.token {
-            Token::Ident(_, Keyword::VALUE) => parser.consume_keyword(Keyword::VALUE)?,
-            Token::Ident(_, Keyword::VALUES) => parser.consume_keyword(Keyword::VALUES)?,
-            _ => parser.expected_failure("'VALUES'")?,
-        };
-
-        let mut values_items = Vec::new();
-        loop {
-            let mut vals = Vec::new();
-            parser.consume_token(Token::LParen)?;
-            parser.recovered(")", &|t| t == &Token::RParen, |parser| {
-                loop {
-                    vals.push(parse_expression(parser, false)?);
-                    if parser.skip_token(Token::Comma).is_none() {
-                        break;
-                    }
-                }
-                Ok(())
-            })?;
-            parser.consume_token(Token::RParen)?;
-            values_items.push(vals);
-            if parser.skip_token(Token::Comma).is_none() {
-                break;
-            }
+    let mut set = None;
+    match &parser.token {
+        Token::Ident(_, Keyword::SELECT) => {
+            select = Some(parse_select(parser)?);
         }
-
-        values = Some((values_span, values_items));
+        Token::Ident(_, Keyword::VALUE | Keyword::VALUES) => {
+            let values_span = parser.consume();
+           let mut values_items = Vec::new();
+           loop {
+               let mut vals = Vec::new();
+               parser.consume_token(Token::LParen)?;
+               parser.recovered(")", &|t| t == &Token::RParen, |parser| {
+                   loop {
+                       vals.push(parse_expression(parser, false)?);
+                       if parser.skip_token(Token::Comma).is_none() {
+                           break;
+                       }
+                   }
+                   Ok(())
+               })?;
+               parser.consume_token(Token::RParen)?;
+               values_items.push(vals);
+               if parser.skip_token(Token::Comma).is_none() {
+                   break;
+               }
+           }
+           values = Some((values_span, values_items));
+        }
+        Token::Ident(_, Keyword::SET) => {
+            let set_span = parser.consume_keyword(Keyword::SET)?;
+            let mut kvps = Vec::new();
+            loop {
+                let col = parser.consume_plain_identifier()?;
+                parser.consume_token(Token::Eq)?;
+                let val = parse_expression(parser, false)?;
+                kvps.push((col, val));
+                if parser.skip_token(Token::Comma).is_none() {
+                    break;
+                }
+            }
+            if let Some(cs) = columns.opt_span() {
+                parser.issues.push(
+                    Issue::err("Columns may not be used here", &cs)
+                        .frag("Together with SET", &set_span),
+                );
+            }
+            set = Some((set_span, kvps));
+        }
+        _ => {
+            parser.expected_error("Expected VALUE, VALUES, SELECT or SET");
+        }
     }
+
 
     let on_duplicate_key_update = if matches!(parser.token, Token::Ident(_, Keyword::ON)) {
         let on_duplicate_key_update_span = parser.consume_keywords(&[
@@ -198,6 +222,7 @@ pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert
     } else {
         None
     };
+
     //  [RETURNING select_expr
     //       [, select_expr ...]]
     Ok(Insert {
@@ -208,6 +233,7 @@ pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert
         into_span,
         values,
         select,
+        set,
         on_duplicate_key_update,
     })
 }
