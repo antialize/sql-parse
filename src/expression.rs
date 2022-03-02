@@ -196,6 +196,7 @@ pub enum Function<'a> {
     UtcDate,
     UtcTime,
     UtcTimeStamp,
+    Value,
     Week,
     Weekday,
     WeekOfYear,
@@ -506,6 +507,7 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::MIN) => Function::Min,
         Token::Ident(_, Keyword::MAX) => Function::Max,
         Token::Ident(_, Keyword::SUM) => Function::Sum,
+        Token::Ident(_, Keyword::VALUE) => Function::Value,
 
         //https://mariadb.com/kb/en/control-flow-functions/
         Token::Ident(_, Keyword::IFNULL) => Function::IfNull,
@@ -600,6 +602,8 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::WEEKDAY) => Function::Weekday,
         Token::Ident(_, Keyword::WEEKOFYEAR) => Function::WeekOfYear,
         Token::Ident(_, Keyword::ADD_MONTHS) => Function::AddMonths,
+        Token::Ident(_, Keyword::FROM_UNIXTIME) => Function::FromUnixTime,
+
 
         // https://mariadb.com/kb/en/json-functions/
         Token::Ident(_, Keyword::JSON_ARRAY) => Function::JsonArray,
@@ -635,7 +639,6 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::JSON_UNQUOTE) => Function::JsonUnquote,
         Token::Ident(_, Keyword::JSON_VALID) => Function::JsonValid,
         Token::Ident(_, Keyword::JSON_VALUE) => Function::JsonValue,
-        Token::Ident(_, Keyword::FROM_UNIXTIME) => Function::FromUnixTime,
         Token::Ident(v, k) if !k.reserved() => Function::Other(v),
         _ => {
             parser
