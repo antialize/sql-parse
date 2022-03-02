@@ -167,7 +167,7 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
         match flag {
             InsertReplaceFlag::LowPriority(_) => {}
             InsertReplaceFlag::HighPriority(s) => {
-                if insert {
+                if !insert {
                     parser
                         .issues
                         .push(Issue::err("Not supported for replace", s));
@@ -175,7 +175,7 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
             }
             InsertReplaceFlag::Delayed(_) => {}
             InsertReplaceFlag::Ignore(s) => {
-                if insert {
+                if !insert {
                     parser
                         .issues
                         .push(Issue::err("Not supported for replace", s));
