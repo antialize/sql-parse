@@ -18,7 +18,8 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Identifier, Span, Spanned,
+    select::parse_table_reference,
+    Identifier, Issue, Span, Spanned, TableReference,
 };
 
 /// Flags for deletion
@@ -56,8 +57,14 @@ impl Spanned for DeleteFlag {
 ///     _ => panic!("We should get a delete statement")
 /// };
 ///
-/// assert!(delete.table.get(0).unwrap().as_str() == "t1");
-/// println!("{:#?}", delete.where_)
+/// assert!(delete.tables[0][0].as_str() == "t1");
+/// println!("{:#?}", delete.where_);
+///
+/// let sql = "DELETE `t1` FROM `t1` LEFT JOIN `t2` ON `t1`.`t2_id`=`t2`.`id` WHERE `t2`.`key`='my_key';";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
 /// ```
 #[derive(Clone, Debug)]
 pub struct Delete<'a> {
@@ -68,7 +75,9 @@ pub struct Delete<'a> {
     /// Span of "FROM"
     pub from_span: Span,
     /// Tables to do deletes on
-    pub table: Vec<Identifier<'a>>,
+    pub tables: Vec<Vec<Identifier<'a>>>,
+    /// Table to use in where clause in multi table delete
+    pub using: Vec<TableReference<'a>>,
     /// Where expression and Span of "WHERE" if specified
     pub where_: Option<(Expression<'a>, Span)>,
 }
@@ -78,7 +87,8 @@ impl<'a> Spanned for Delete<'a> {
         self.delete_span
             .join_span(&self.flags)
             .join_span(&self.from_span)
-            .join_span(&self.table)
+            .join_span(&self.tables)
+            .join_span(&self.using)
             .join_span(&self.where_)
     }
 }
@@ -87,40 +97,79 @@ pub(crate) fn parse_delete<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Delete
     let delete_span = parser.consume_keyword(Keyword::DELETE)?;
     let mut flags = Vec::new();
 
-    parser.recovered(
-        "FROM",
-        &|t| matches!(t, Token::Ident(_, Keyword::FROM)),
-        |parser| {
-            loop {
-                match &parser.token {
-                    Token::Ident(_, Keyword::LOW_PRIORITY) => flags.push(DeleteFlag::LowPriority(
-                        parser.consume_keyword(Keyword::LOW_PRIORITY)?,
-                    )),
-                    Token::Ident(_, Keyword::QUICK) => {
-                        flags.push(DeleteFlag::Quick(parser.consume_keyword(Keyword::QUICK)?))
-                    }
-                    Token::Ident(_, Keyword::IGNORE) => {
-                        flags.push(DeleteFlag::Ignore(parser.consume_keyword(Keyword::IGNORE)?))
-                    }
-                    _ => break,
-                }
-            }
-            Ok(())
-        },
-    )?;
-
-    let from_span = parser.consume_keyword(Keyword::FROM)?;
-
-    let mut table = vec![parser.consume_plain_identifier()?];
     loop {
-        if parser.skip_token(Token::Period).is_none() {
-            break;
+        match &parser.token {
+            Token::Ident(_, Keyword::LOW_PRIORITY) => flags.push(DeleteFlag::LowPriority(
+                parser.consume_keyword(Keyword::LOW_PRIORITY)?,
+            )),
+            Token::Ident(_, Keyword::QUICK) => {
+                flags.push(DeleteFlag::Quick(parser.consume_keyword(Keyword::QUICK)?))
+            }
+            Token::Ident(_, Keyword::IGNORE) => {
+                flags.push(DeleteFlag::Ignore(parser.consume_keyword(Keyword::IGNORE)?))
+            }
+            _ => break,
         }
-        table.push(parser.consume_plain_identifier()?);
     }
+
+    let mut tables = Vec::new();
+    let mut using = Vec::new();
+    let from_span = if let Some(from_span) = parser.skip_keyword(Keyword::FROM) {
+        loop {
+            let mut table = vec![parser.consume_plain_identifier()?];
+            loop {
+                if parser.skip_token(Token::Period).is_none() {
+                    break;
+                }
+                table.push(parser.consume_plain_identifier()?);
+            }
+            tables.push(table);
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        from_span
+    } else {
+        loop {
+            let mut table = vec![parser.consume_plain_identifier()?];
+            loop {
+                if parser.skip_token(Token::Period).is_none() {
+                    break;
+                }
+                table.push(parser.consume_plain_identifier()?);
+            }
+            tables.push(table);
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        let from_span = parser.consume_keyword(Keyword::FROM)?;
+        loop {
+            using.push(parse_table_reference(parser)?);
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        from_span
+    };
 
     //TODO [PARTITION (partition_list)]
     //TODO [FOR PORTION OF period FROM expr1 TO expr2]
+
+    if let Some(using_span) = parser.skip_keyword(Keyword::USING) {
+        if !using.is_empty() {
+            parser.issues.push(Issue::err(
+                "Using not allowed in delete with table names before FROM",
+                &using_span,
+            ));
+        }
+        loop {
+            using.push(parse_table_reference(parser)?);
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+    }
 
     let where_ = if let Some(span) = parser.skip_keyword(Keyword::WHERE) {
         Some((parse_expression(parser, false)?, span))
@@ -135,7 +184,8 @@ pub(crate) fn parse_delete<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Delete
     Ok(Delete {
         flags,
         delete_span,
-        table,
+        tables,
+        using,
         from_span,
         where_,
     })

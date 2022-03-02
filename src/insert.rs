@@ -9,7 +9,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -52,7 +51,10 @@ impl Spanned for InsertFlag {
 /// let sql1 = "INSERT INTO person (first_name, last_name) VALUES ('John', 'Doe')";
 /// let stmt1 = parse_statement(sql1, &mut issues, &options);
 /// let sql2 = "INSERT INTO contractor SELECT * FROM person WHERE status = 'c'";
-/// let stmt2 = parse_statement(sql1, &mut issues, &options);
+/// let stmt2 = parse_statement(sql2, &mut issues, &options);
+/// let sql3 = "INSERT INTO account (`key`, `value`) VALUES ('foo', 42)
+///             ON DUPLICATE KEY UPDATE `value`=`value`+42";
+/// let stmt3 = parse_statement(sql3, &mut issues, &options);
 ///
 /// # assert!(issues.is_empty());
 /// #
@@ -80,6 +82,8 @@ pub struct Insert<'a> {
     pub values: Option<(Span, Vec<Vec<Expression<'a>>>)>,
     /// Select statement to insert if specified
     pub select: Option<Select<'a>>,
+    /// Updates to execute on duplicate key
+    pub on_duplicate_key_update: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
 }
 
 impl<'a> Spanned for Insert<'a> {
@@ -173,11 +177,29 @@ pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert
         values = Some((values_span, values_items));
     }
 
-    //  [ ON DUPLICATE KEY UPDATE
-    //    col=expr
-    //      [, col=expr] ... ] [RETURNING select_expr
+    let on_duplicate_key_update = if matches!(parser.token, Token::Ident(_, Keyword::ON)) {
+        let on_duplicate_key_update_span = parser.consume_keywords(&[
+            Keyword::ON,
+            Keyword::DUPLICATE,
+            Keyword::KEY,
+            Keyword::UPDATE,
+        ])?;
+        let mut kvps = Vec::new();
+        loop {
+            let col = parser.consume_plain_identifier()?;
+            let eq_token = parser.consume_token(Token::Eq)?;
+            let expr = parse_expression(parser, false)?;
+            kvps.push((col, eq_token, expr));
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        Some((on_duplicate_key_update_span, kvps))
+    } else {
+        None
+    };
+    //  [RETURNING select_expr
     //       [, select_expr ...]]
-
     Ok(Insert {
         flags,
         insert_span,
@@ -186,5 +208,6 @@ pub(crate) fn parse_insert<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Insert
         into_span,
         values,
         select,
+        on_duplicate_key_update,
     })
 }
