@@ -72,6 +72,7 @@ pub enum Function<'a> {
     Format,
     FromBase64,
     FromDays,
+    FromUnixTime,
     Greatest,
     Hex,
     If,
@@ -634,6 +635,7 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::JSON_UNQUOTE) => Function::JsonUnquote,
         Token::Ident(_, Keyword::JSON_VALID) => Function::JsonValid,
         Token::Ident(_, Keyword::JSON_VALUE) => Function::JsonValue,
+        Token::Ident(_, Keyword::FROM_UNIXTIME) => Function::FromUnixTime,
         Token::Ident(v, k) if !k.reserved() => Function::Other(v),
         _ => {
             parser
