@@ -508,6 +508,7 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::MAX) => Function::Max,
         Token::Ident(_, Keyword::SUM) => Function::Sum,
         Token::Ident(_, Keyword::VALUE) => Function::Value,
+        Token::Ident(_, Keyword::VALUES) => Function::Value,
 
         //https://mariadb.com/kb/en/control-flow-functions/
         Token::Ident(_, Keyword::IFNULL) => Function::IfNull,

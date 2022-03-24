@@ -445,6 +445,8 @@ pub struct Select<'a> {
     pub order_by: Option<(Span, Vec<(Expression<'a>, OrderFlag)>)>,
     /// Span of "LIMIT", offset and count expressions if specified
     pub limit: Option<(Span, Option<Expression<'a>>, Expression<'a>)>,
+    /// Span of "FOR UPDATE"
+    pub for_update_span: Option<Span>
 }
 impl<'a> Spanned for Select<'a> {
     fn span(&self) -> Span {
@@ -527,6 +529,7 @@ pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select
                 window_span: None,
                 order_by: None,
                 limit: None,
+                for_update_span: None
             })
         }
     };
@@ -606,6 +609,13 @@ pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select
     } else {
         None
     };
+
+    let for_update_span = if let Some(for_span) = parser.skip_keyword(Keyword::FOR) {
+        Some(parser.consume_keyword(Keyword::UPDATE)?.join_span(&for_span))
+    } else {
+        None
+    };
+
     // TODO [into_option]
     // [FOR {UPDATE | SHARE}
     //     [OF tbl_name [, tbl_name] ...]
@@ -633,5 +643,6 @@ pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select
         window_span,
         order_by,
         limit,
+        for_update_span
     })
 }
