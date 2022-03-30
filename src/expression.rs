@@ -15,9 +15,9 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    select::{parse_select, Select},
+    select::{parse_select},
     span::OptSpanned,
-    DataType, Identifier, SString, Span, Spanned,
+    DataType, Identifier, SString, Span, Spanned, statement::parse_compound_query, Statement,
 };
 use alloc::string::ToString;
 use alloc::vec;
@@ -316,7 +316,7 @@ pub enum Expression<'a> {
         operand: Box<Expression<'a>>,
     },
     /// Subquery expression
-    Subquery(Box<Select<'a>>),
+    Subquery(Box<Statement<'a>>),
     /// Literal NULL expression
     Null(Span),
     /// Literal bool expression "TRUE" or "FALSE"
@@ -335,7 +335,7 @@ pub enum Expression<'a> {
     /// Input argument to query, the first argument is the occurrence number of the argumnet
     Arg((usize, Span)),
     /// Exists expression
-    Exists(Box<Select<'a>>),
+    Exists(Box<Statement<'a>>),
     /// In expression
     In {
         /// Left hand side expression
@@ -865,7 +865,7 @@ pub(crate) fn parse_expression<'a, 'b>(
                         "')' or ','",
                         &|t| matches!(t, Token::RParen | Token::Comma),
                         |parser| {
-                            rhs.push(parse_expression_outer(parser)?);
+                            rhs.push(parse_expression_paren(parser)?);
                             Ok(())
                         },
                     )?;
@@ -945,7 +945,7 @@ pub(crate) fn parse_expression<'a, 'b>(
                                 "')' or ','",
                                 &|t| matches!(t, Token::RParen | Token::Comma),
                                 |parser| {
-                                    rhs.push(parse_expression_outer(parser)?);
+                                    rhs.push(parse_expression_paren(parser)?);
                                     Ok(())
                                 },
                             )?;
@@ -1097,14 +1097,14 @@ pub(crate) fn parse_expression<'a, 'b>(
             }
             Token::LParen => {
                 parser.consume_token(Token::LParen)?;
-                let ans = parse_expression_outer(parser)?;
+                let ans = parse_expression_paren(parser)?;
                 parser.consume_token(Token::RParen)?;
                 r.shift_expr(ans)
             }
             Token::Ident(_, Keyword::EXISTS) => {
                 parser.consume_keyword(Keyword::EXISTS)?;
                 parser.consume_token(Token::LParen)?;
-                let ans = Expression::Exists(Box::new(parse_select(parser)?));
+                let ans = Expression::Exists(Box::new(parse_compound_query(parser)?));
                 parser.consume_token(Token::RParen)?;
                 r.shift_expr(ans)
             }
@@ -1172,7 +1172,17 @@ pub(crate) fn parse_expression_outer<'a, 'b>(
     parser: &mut Parser<'a, 'b>,
 ) -> Result<Expression<'a>, ParseError> {
     if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
-        Ok(Expression::Subquery(Box::new(parse_select(parser)?)))
+        Ok(Expression::Subquery(Box::new(Statement::Select(parse_select(parser)?))))
+    } else {
+        parse_expression(parser, false)
+    }
+}
+
+pub(crate) fn parse_expression_paren<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<Expression<'a>, ParseError> {
+    if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
+        Ok(Expression::Subquery(Box::new(parse_compound_query(parser)?)))
     } else {
         parse_expression(parser, false)
     }
