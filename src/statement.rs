@@ -14,7 +14,7 @@ use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
     alter::{parse_alter, AlterTable},
-    create::{parse_create, CreateFunction, CreateTable, CreateTrigger, CreateView},
+    create::{parse_create, CreateFunction, CreateIndex, CreateTable, CreateTrigger, CreateView},
     delete::{parse_delete, Delete},
     drop::{
         parse_drop, DropDatabase, DropEvent, DropFunction, DropProcedure, DropServer, DropTable,
@@ -64,12 +64,22 @@ fn parse_statement_list_inner<'a, 'b>(
 ) -> Result<(), ParseError> {
     loop {
         while parser.skip_token(Token::SemiColon).is_some() {}
+        let mut stdin = false;
         match parse_statement(parser)? {
-            Some(v) => out.push(v),
+            Some(v) => {
+                stdin = v.reads_from_stdin();
+                out.push(v);
+            }
             None => break,
         }
-        if parser.skip_token(Token::SemiColon).is_none() {
+        if !matches!(parser.token, Token::SemiColon) {
             break;
+        }
+        if stdin {
+            let (s, span) = parser.read_from_stdin_and_next();
+            out.push(Statement::Stdin(s, span));
+        } else {
+            parser.consume_token(Token::SemiColon)?;
         }
     }
     Ok(())
@@ -83,6 +93,25 @@ fn parse_statement_list<'a, 'b>(
     let r = parse_statement_list_inner(parser, out);
     parser.delimiter = old_delimiter;
     r
+}
+
+fn parse_begin<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Span, ParseError> {
+    parser.consume_keyword(Keyword::BEGIN)
+}
+
+fn parse_end<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Span, ParseError> {
+    parser.consume_keyword(Keyword::END)
+}
+
+fn parse_start<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statement<'a>, ParseError> {
+    Ok(Statement::StartTransaction(parser.consume_keywords(&[
+        Keyword::START,
+        Keyword::TRANSACTION,
+    ])?))
+}
+
+fn parse_commit<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Span, ParseError> {
+    parser.consume_keyword(Keyword::COMMIT)
 }
 
 fn parse_block<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<Statement<'a>>, ParseError> {
@@ -192,6 +221,7 @@ fn parse_if<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<If<'a>, ParseError> {
 /// SQL statement
 #[derive(Clone, Debug)]
 pub enum Statement<'a> {
+    CreateIndex(CreateIndex<'a>),
     CreateTable(CreateTable<'a>),
     CreateView(CreateView<'a>),
     CreateTrigger(CreateTrigger<'a>),
@@ -211,16 +241,23 @@ pub enum Statement<'a> {
     Set(Set<'a>),
     AlterTable(AlterTable<'a>),
     Block(Vec<Statement<'a>>), //TODO we should include begin and end
+    Begin(Span),
+    End(Span),
+    Commit(Span),
+    StartTransaction(Span),
     If(If<'a>),
     /// Invalid statement produced after recovering from parse error
     Invalid(Span),
     Union(Union<'a>),
     Case(CaseStatement<'a>),
+    Copy(Copy<'a>),
+    Stdin(&'a str, Span),
 }
 
 impl<'a> Spanned for Statement<'a> {
     fn span(&self) -> Span {
         match &self {
+            Statement::CreateIndex(v) => v.span(),
             Statement::CreateTable(v) => v.span(),
             Statement::CreateView(v) => v.span(),
             Statement::CreateTrigger(v) => v.span(),
@@ -244,6 +281,21 @@ impl<'a> Spanned for Statement<'a> {
             Statement::Invalid(v) => v.span(),
             Statement::Union(v) => v.span(),
             Statement::Case(v) => v.span(),
+            Statement::Copy(v) => v.span(),
+            Statement::Stdin(_, s) => s.clone(),
+            Statement::Begin(s) => s.clone(),
+            Statement::End(s) => s.clone(),
+            Statement::Commit(s) => s.clone(),
+            Statement::StartTransaction(s) => s.clone(),
+        }
+    }
+}
+
+impl Statement<'_> {
+    fn reads_from_stdin(&self) -> bool {
+        match self {
+            Statement::Copy(v) => v.reads_from_stdin(),
+            _ => false,
         }
     }
 }
@@ -261,10 +313,20 @@ pub(crate) fn parse_statement<'a, 'b>(
         }
         Token::Ident(_, Keyword::UPDATE) => Some(Statement::Update(parse_update(parser)?)),
         Token::Ident(_, Keyword::SET) => Some(Statement::Set(parse_set(parser)?)),
-        Token::Ident(_, Keyword::BEGIN) => Some(Statement::Block(parse_block(parser)?)),
+        Token::Ident(_, Keyword::BEGIN) => Some(if parser.permit_compound_statements {
+            Statement::Block(parse_block(parser)?)
+        } else {
+            Statement::Begin(parse_begin(parser)?)
+        }),
+        Token::Ident(_, Keyword::END) if !parser.permit_compound_statements => {
+            Some(Statement::End(parse_end(parser)?))
+        }
+        Token::Ident(_, Keyword::START) => Some(parse_start(parser)?),
+        Token::Ident(_, Keyword::COMMIT) => Some(Statement::Commit(parse_commit(parser)?)),
         Token::Ident(_, Keyword::IF) => Some(Statement::If(parse_if(parser)?)),
         Token::Ident(_, Keyword::ALTER) => Some(parse_alter(parser)?),
         Token::Ident(_, Keyword::CASE) => Some(Statement::Case(parse_case_statement(parser)?)),
+        Token::Ident(_, Keyword::COPY) => Some(Statement::Copy(parse_copy_statement(parser)?)),
         _ => None,
     })
 }
@@ -361,6 +423,42 @@ pub(crate) fn parse_case_statement<'a, 'b>(
     })
 }
 
+pub(crate) fn parse_copy_statement<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<Copy<'a>, ParseError> {
+    let copy_span = parser.consume_keyword(Keyword::COPY)?;
+    let table = parser.consume_plain_identifier()?;
+    parser.consume_token(Token::LParen)?;
+    let mut columns = Vec::new();
+    if !matches!(parser.token, Token::RParen) {
+        loop {
+            parser.recovered(
+                "')' or ','",
+                &|t| matches!(t, Token::RParen | Token::Comma),
+                |parser| {
+                    columns.push(parser.consume_plain_identifier()?);
+                    Ok(())
+                },
+            )?;
+            if matches!(parser.token, Token::RParen) {
+                break;
+            }
+            parser.consume_token(Token::Comma)?;
+        }
+    }
+    parser.consume_token(Token::RParen)?;
+    let from_span = parser.consume_keyword(Keyword::FROM)?;
+    let stdin_span = parser.consume_keyword(Keyword::STDIN)?;
+
+    Ok(Copy {
+        copy_span,
+        table,
+        columns,
+        from_span,
+        stdin_span,
+    })
+}
+
 pub(crate) fn parse_compound_query_bottom<'a, 'b>(
     parser: &mut Parser<'a, 'b>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -434,6 +532,33 @@ impl<'a> Spanned for Union<'a> {
             .join_span(&self.with)
             .join_span(&self.order_by)
             .join_span(&self.limit)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Copy<'a> {
+    pub copy_span: Span,
+    pub table: Identifier<'a>,
+    pub columns: Vec<Identifier<'a>>,
+    pub from_span: Span,
+    pub stdin_span: Span,
+}
+
+impl<'a> Spanned for Copy<'a> {
+    fn span(&self) -> Span {
+        self.copy_span
+            .join_span(&self.table)
+            .join_span(&self.columns)
+            .join_span(&self.from_span)
+            .join_span(&self.stdin_span)
+    }
+}
+
+impl<'a> Copy<'a> {
+    fn reads_from_stdin(&self) -> bool {
+        // There are COPY statements that don't read from STDIN,
+        // but we don't support them in this parser - we only support FROM STDIN.
+        true
     }
 }
 
@@ -542,7 +667,9 @@ pub(crate) fn parse_statements<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Vec<State
             Err(e) => Err(e),
         };
         let err = stmt.is_err();
+        let mut from_stdin = false;
         if let Ok(stmt) = stmt {
+            from_stdin = stmt.reads_from_stdin();
             ans.push(stmt);
         }
 
@@ -560,8 +687,13 @@ pub(crate) fn parse_statements<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Vec<State
                 }
             }
         }
-        parser
-            .consume_token(parser.delimiter.clone())
-            .expect("Delimiter");
+        if from_stdin {
+            let (s, span) = parser.read_from_stdin_and_next();
+            ans.push(Statement::Stdin(s, span));
+        } else {
+            parser
+                .consume_token(parser.delimiter.clone())
+                .expect("Delimiter");
+        }
     }
 }

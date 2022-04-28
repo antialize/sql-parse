@@ -96,6 +96,13 @@ pub use update::{Update, UpdateFlag};
 pub enum SQLDialect {
     /// Parse MariaDB/Mysql SQL
     MariaDB,
+    PostgreSQL,
+}
+
+impl SQLDialect {
+    fn is_postgresql(&self) -> bool {
+        matches!(self, SQLDialect::PostgreSQL)
+    }
 }
 
 /// What kinds or arguments

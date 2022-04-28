@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 use alloc::{boxed::Box, vec::Vec};
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -796,10 +798,12 @@ fn parse_create_trigger<'a, 'b>(
 
     // TODO [{ FOLLOWS | PRECEDES } other_trigger_name ]
 
+    let old = core::mem::replace(&mut parser.permit_compound_statements, true);
     let statement = match parse_statement(parser)? {
         Some(v) => v,
         None => parser.expected_failure("statement")?,
     };
+    parser.permit_compound_statements = old;
 
     Ok(Statement::CreateTrigger(CreateTrigger {
         create_span,
@@ -813,6 +817,81 @@ fn parse_create_trigger<'a, 'b>(
         table,
         for_each_row_span,
         statement: Box::new(statement),
+    }))
+}
+
+#[derive(Clone, Debug)]
+pub enum CreateIndexOption {
+    UsingGist(Span),
+}
+
+impl Spanned for CreateIndexOption {
+    fn span(&self) -> Span {
+        match self {
+            CreateIndexOption::UsingGist(s) => s.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CreateIndex<'a> {
+    create_span: Span,
+    create_options: Vec<CreateOption<'a>>,
+    index_span: Span,
+    index_name: Identifier<'a>,
+    on_span: Span,
+    table_name: Identifier<'a>,
+    index_options: Vec<CreateIndexOption>,
+    l_paren_span: Span,
+    column_name: Identifier<'a>,
+    r_paren_span: Span,
+}
+
+impl<'a> Spanned for CreateIndex<'a> {
+    fn span(&self) -> Span {
+        self.create_span
+            .join_span(&self.create_options)
+            .join_span(&self.index_span)
+            .join_span(&self.index_name)
+            .join_span(&self.on_span)
+            .join_span(&self.table_name)
+            .join_span(&self.index_options)
+            .join_span(&self.l_paren_span)
+            .join_span(&self.column_name)
+            .join_span(&self.r_paren_span)
+    }
+}
+
+fn parse_create_index<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+    create_span: Span,
+    create_options: Vec<CreateOption<'a>>,
+) -> Result<Statement<'a>, ParseError> {
+    let index_span = parser.consume_keyword(Keyword::INDEX)?;
+    let index_name = parser.consume_plain_identifier()?;
+    let on_span = parser.consume_keyword(Keyword::ON)?;
+    let table_name = parser.consume_plain_identifier()?;
+    let mut index_options = Vec::new();
+    if let Some(using_span) = parser.skip_keyword(Keyword::USING) {
+        let gist_span = parser.consume_keyword(Keyword::GIST)?;
+        index_options.push(CreateIndexOption::UsingGist(
+            gist_span.join_span(&using_span),
+        ));
+    }
+    let l_paren_span = parser.consume_token(Token::LParen)?;
+    let column_name = parser.consume_plain_identifier()?;
+    let r_paren_span = parser.consume_token(Token::RParen)?;
+    Ok(Statement::CreateIndex(CreateIndex {
+        create_span,
+        create_options,
+        index_span,
+        index_name,
+        on_span,
+        table_name,
+        index_options,
+        l_paren_span,
+        column_name,
+        r_paren_span,
     }))
 }
 
@@ -842,19 +921,21 @@ fn parse_create_table<'a, 'b>(
     parser.consume_token(Token::LParen)?;
 
     let mut create_definitions = Vec::new();
-    loop {
-        parser.recovered(
-            "')' or ','",
-            &|t| matches!(t, Token::RParen | Token::Comma),
-            |parser| {
-                create_definitions.push(parse_create_definition(parser)?);
-                Ok(())
-            },
-        )?;
-        if matches!(parser.token, Token::RParen) {
-            break;
+    if !matches!(parser.token, Token::RParen) {
+        loop {
+            parser.recovered(
+                "')' or ','",
+                &|t| matches!(t, Token::RParen | Token::Comma),
+                |parser| {
+                    create_definitions.push(parse_create_definition(parser)?);
+                    Ok(())
+                },
+            )?;
+            if matches!(parser.token, Token::RParen) {
+                break;
+            }
+            parser.consume_token(Token::Comma)?;
         }
-        parser.consume_token(Token::Comma)?;
     }
     parser.consume_token(Token::RParen)?;
 
@@ -959,7 +1040,7 @@ pub(crate) fn parse_create<'a, 'b>(
     parser.consume_keyword(Keyword::CREATE)?;
 
     let mut create_options = Vec::new();
-    const CREATABLE: &str = "'TABLE' | 'VIEW' | 'TRIGGER' | 'FUNCTION'";
+    const CREATABLE: &str = "'TABLE' | 'VIEW' | 'TRIGGER' | 'FUNCTION' | 'INDEX'";
 
     parser.recovered(
         CREATABLE,
@@ -968,7 +1049,11 @@ pub(crate) fn parse_create<'a, 'b>(
                 t,
                 Token::Ident(
                     _,
-                    Keyword::TABLE | Keyword::VIEW | Keyword::TRIGGER | Keyword::FUNCTION
+                    Keyword::TABLE
+                        | Keyword::VIEW
+                        | Keyword::TRIGGER
+                        | Keyword::FUNCTION
+                        | Keyword::INDEX
                 )
             )
         },
@@ -1035,6 +1120,7 @@ pub(crate) fn parse_create<'a, 'b>(
     )?;
 
     match &parser.token {
+        Token::Ident(_, Keyword::INDEX) => parse_create_index(parser, create_span, create_options),
         Token::Ident(_, Keyword::TABLE) => parse_create_table(parser, create_span, create_options),
         Token::Ident(_, Keyword::VIEW) => parse_create_view(parser, create_span, create_options),
         Token::Ident(_, Keyword::FUNCTION) => {

@@ -134,6 +134,11 @@ impl<'a> Spanned for IndexCol<'a> {
 /// Enum of alterations to perform on a table
 #[derive(Clone, Debug)]
 pub enum AlterSpecification<'a> {
+    AddColumn {
+        add_span: Span,
+        identifier: Identifier<'a>,
+        data_type: DataType<'a>,
+    },
     /// Add an index
     AddIndex {
         /// Span of "ADD"
@@ -190,6 +195,11 @@ pub enum AlterSpecification<'a> {
 impl<'a> Spanned for AlterSpecification<'a> {
     fn span(&self) -> Span {
         match &self {
+            AlterSpecification::AddColumn {
+                add_span,
+                identifier,
+                data_type,
+            } => add_span.join_span(identifier).join_span(data_type),
             AlterSpecification::AddIndex {
                 add_span,
                 index_type,
@@ -485,6 +495,16 @@ fn parse_add_alter_specification<'a, 'b>(
                 name,
                 cols,
                 index_options,
+            })
+        }
+        Token::Ident(_, Keyword::COLUMN) => {
+            parser.consume_keyword(Keyword::COLUMN)?;
+            let identifier = parser.consume_plain_identifier()?;
+            let data_type = parse_data_type(parser)?;
+            Ok(AlterSpecification::AddColumn {
+                add_span,
+                identifier,
+                data_type,
             })
         }
         _ => parser.expected_failure("addable"),

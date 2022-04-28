@@ -67,24 +67,40 @@ impl<'a> Spanned for DataTypeProperty<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Timestamp {
+    pub width: Option<(usize, Span)>,
+    pub with_time_zone: Option<Span>,
+}
+
+impl OptSpanned for Timestamp {
+    fn opt_span(&self) -> Option<Span> {
+        self.width.opt_span().opt_join_span(&self.with_time_zone)
+    }
+}
+
 /// Type of datatype
 #[derive(Debug, Clone)]
 pub enum Type<'a> {
+    Boolean,
     TinyInt(Option<(usize, Span)>),
     SmallInt(Option<(usize, Span)>),
+    Integer(Option<(usize, Span)>),
     Int(Option<(usize, Span)>),
     BigInt(Option<(usize, Span)>),
-    VarChar((usize, Span)),
+    VarChar(Option<(usize, Span)>),
     TinyText(Option<(usize, Span)>),
     MediumText(Option<(usize, Span)>),
     Text(Option<(usize, Span)>),
     LongText(Option<(usize, Span)>),
     Enum(Vec<SString<'a>>),
     Set(Vec<SString<'a>>),
+    Float8,
     Float(Option<(usize, usize, Span)>),
     Double(Option<(usize, usize, Span)>),
+    Numeric(usize, usize, Span),
     DateTime(Option<(usize, Span)>),
-    Timestamp(Option<(usize, Span)>),
+    Timestamp(Timestamp),
     Time(Option<(usize, Span)>),
     TinyBlob(Option<(usize, Span)>),
     MediumBlob(Option<(usize, Span)>),
@@ -97,8 +113,10 @@ pub enum Type<'a> {
 impl<'a> OptSpanned for Type<'a> {
     fn opt_span(&self) -> Option<Span> {
         match &self {
+            Type::Boolean => None,
             Type::TinyInt(v) => v.opt_span(),
             Type::SmallInt(v) => v.opt_span(),
+            Type::Integer(v) => v.opt_span(),
             Type::Int(v) => v.opt_span(),
             Type::BigInt(v) => v.opt_span(),
             Type::VarChar(v) => v.opt_span(),
@@ -108,8 +126,10 @@ impl<'a> OptSpanned for Type<'a> {
             Type::LongText(v) => v.opt_span(),
             Type::Enum(v) => v.opt_span(),
             Type::Set(v) => v.opt_span(),
+            Type::Float8 => None,
             Type::Float(v) => v.opt_span(),
             Type::Double(v) => v.opt_span(),
+            Type::Numeric(_, _, v) => v.opt_span(),
             Type::DateTime(v) => v.opt_span(),
             Type::Timestamp(v) => v.opt_span(),
             Type::Time(v) => v.opt_span(),
@@ -184,6 +204,10 @@ pub(crate) fn parse_data_type<'a, 'b>(
     parser: &mut Parser<'a, 'b>,
 ) -> Result<DataType<'a>, ParseError> {
     let (identifier, type_) = match &parser.token {
+        Token::Ident(_, Keyword::BOOLEAN) => (
+            parser.consume_keyword(Keyword::BOOLEAN)?,
+            Type::Boolean,
+        ),
         Token::Ident(_, Keyword::TINYINT) => (
             parser.consume_keyword(Keyword::TINYINT)?,
             Type::TinyInt(parse_width(parser)?),
@@ -191,6 +215,10 @@ pub(crate) fn parse_data_type<'a, 'b>(
         Token::Ident(_, Keyword::SMALLINT) => (
             parser.consume_keyword(Keyword::SMALLINT)?,
             Type::SmallInt(parse_width(parser)?),
+        ),
+        Token::Ident(_, Keyword::INTEGER) => (
+            parser.consume_keyword(Keyword::INTEGER)?,
+            Type::Integer(parse_width(parser)?),
         ),
         Token::Ident(_, Keyword::INT) => (
             parser.consume_keyword(Keyword::INT)?,
@@ -218,7 +246,7 @@ pub(crate) fn parse_data_type<'a, 'b>(
         ),
         Token::Ident(_, Keyword::VARCHAR) => (
             parser.consume_keyword(Keyword::VARCHAR)?,
-            Type::VarChar(parse_width_req(parser)?),
+            Type::VarChar(parse_width(parser)?),
         ),
         Token::Ident(_, Keyword::TINYBLOB) => (
             parser.consume_keyword(Keyword::TINYBLOB)?,
@@ -240,11 +268,33 @@ pub(crate) fn parse_data_type<'a, 'b>(
             parser.consume_keyword(Keyword::VARBINARY)?,
             Type::VarBinary(parse_width_req(parser)?),
         ),
+        Token::Ident(_, Keyword::FLOAT8) => {
+            (parser.consume_keyword(Keyword::FLOAT8)?, Type::Float8)
+        }
         Token::Ident(_, Keyword::FLOAT) => {
             (parser.consume_keyword(Keyword::FLOAT)?, Type::Float(None)) // TODO
         }
         Token::Ident(_, Keyword::DOUBLE) => {
             (parser.consume_keyword(Keyword::DOUBLE)?, Type::Double(None)) // TODO
+        }
+        Token::Ident(_, Keyword::NUMERIC) => {
+            let numeric = parser.consume_keyword(Keyword::NUMERIC)?;
+            let left = parser.consume_token(Token::LParen)?;
+            let (v1, s1) = parser.consume_int()?;
+            let comma = parser.consume_token(Token::Comma)?;
+            let (v2, s2) = parser.consume_int()?;
+            let right = parser.consume_token(Token::RParen)?;
+            (
+                numeric,
+                Type::Numeric(
+                    v1,
+                    v2,
+                    left.join_span(&s1)
+                        .join_span(&comma)
+                        .join_span(&s2)
+                        .join_span(&right),
+                ),
+            )
         }
         Token::Ident(_, Keyword::DATETIME) => (
             parser.consume_keyword(Keyword::DATETIME)?,
@@ -254,10 +304,21 @@ pub(crate) fn parse_data_type<'a, 'b>(
             parser.consume_keyword(Keyword::TIME)?,
             Type::Time(parse_width(parser)?),
         ),
-        Token::Ident(_, Keyword::TIMESTAMP) => (
-            parser.consume_keyword(Keyword::TIMESTAMP)?,
-            Type::Timestamp(parse_width(parser)?),
-        ),
+        Token::Ident(_, Keyword::TIMESTAMP) => {
+            let timestamp_span = parser.consume_keyword(Keyword::TIMESTAMP)?;
+            let width = parse_width(parser)?;
+            let with_time_zone = match parser.skip_keyword(Keyword::WITH) {
+                Some(with_span) => Some(
+                    with_span.join_span(&parser.consume_keywords(&[Keyword::TIME, Keyword::ZONE])?),
+                ),
+                None => None,
+            };
+            let timestamp = Timestamp {
+                width,
+                with_time_zone,
+            };
+            (timestamp_span, Type::Timestamp(timestamp))
+        }
         Token::Ident(_, Keyword::DATE) => (parser.consume_keyword(Keyword::DATE)?, Type::Date),
         Token::Ident(_, Keyword::ENUM) => (
             parser.consume_keyword(Keyword::ENUM)?,

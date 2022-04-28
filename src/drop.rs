@@ -50,6 +50,8 @@ pub struct DropTable<'a> {
     pub if_exists: Option<Span>,
     /// List of tables to drops
     pub tables: Vec<Identifier<'a>>,
+    /// Span of "CASCADE" if specified
+    pub cascade: Option<Span>,
 }
 
 impl<'a> Spanned for DropTable<'a> {
@@ -366,12 +368,18 @@ pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statemen
                     break;
                 }
             }
+            let cascade = if parser.options.dialect.is_postgresql() {
+                parser.skip_keyword(Keyword::CASCADE)
+            } else {
+                None
+            };
             Ok(Statement::DropTable(DropTable {
                 drop_span,
                 temporary,
                 table_span,
                 if_exists,
                 tables,
+                cascade,
             }))
         }
         Token::Ident(_, kw @ Keyword::DATABASE | kw @ Keyword::SCHEMA) => {
