@@ -15,9 +15,10 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    select::{parse_select},
+    select::parse_select,
     span::OptSpanned,
-    DataType, Identifier, SString, Span, Spanned, statement::parse_compound_query, Statement,
+    statement::parse_compound_query,
+    DataType, Identifier, SString, Span, Spanned, Statement,
 };
 use alloc::string::ToString;
 use alloc::vec;
@@ -605,7 +606,6 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::ADD_MONTHS) => Function::AddMonths,
         Token::Ident(_, Keyword::FROM_UNIXTIME) => Function::FromUnixTime,
 
-
         // https://mariadb.com/kb/en/json-functions/
         Token::Ident(_, Keyword::JSON_ARRAY) => Function::JsonArray,
         Token::Ident(_, Keyword::JSON_ARRAYAGG) => Function::JsonArrayAgg,
@@ -1172,7 +1172,9 @@ pub(crate) fn parse_expression_outer<'a, 'b>(
     parser: &mut Parser<'a, 'b>,
 ) -> Result<Expression<'a>, ParseError> {
     if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
-        Ok(Expression::Subquery(Box::new(Statement::Select(parse_select(parser)?))))
+        Ok(Expression::Subquery(Box::new(Statement::Select(
+            parse_select(parser)?,
+        ))))
     } else {
         parse_expression(parser, false)
     }
@@ -1182,7 +1184,9 @@ pub(crate) fn parse_expression_paren<'a, 'b>(
     parser: &mut Parser<'a, 'b>,
 ) -> Result<Expression<'a>, ParseError> {
     if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
-        Ok(Expression::Subquery(Box::new(parse_compound_query(parser)?)))
+        Ok(Expression::Subquery(Box::new(parse_compound_query(
+            parser,
+        )?)))
     } else {
         parse_expression(parser, false)
     }

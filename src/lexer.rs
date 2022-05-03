@@ -151,6 +151,54 @@ impl<'a> Lexer<'a> {
         Token::Ident(s, ss.as_str().into())
     }
 
+    /// Simulate reading from standard input after a statement like `COPY ... FROM STDIN;`.
+    /// First skips space characters and optionally one NL.
+    /// Then consumes until NL '\' '.' NL is encountered, or until EOF.
+    /// The trailing '\' '.' NL is consumed but not returned.
+    pub fn read_from_stdin(&mut self) -> (&'a str, Span) {
+        // Skip optional spaces.
+        while self.chars.peek().filter(|(_, c)| *c != '\n' && c.is_ascii_whitespace()).is_some() {
+            self.chars.next().unwrap();
+        }
+        let start = match self.chars.peek() {
+            Some((i, '\n')) => i+1,
+            Some((i, _)) => *i,
+            None => {
+                let span = self.src.len()..self.src.len();
+                return (self.s(span.clone()), span);
+            }
+        };
+        while let Some((i, c)) = self.chars.next() {
+            if c != '\n' {
+                continue;
+            }
+            if !matches!(self.chars.peek(), Some((_, '\\'))) {
+                continue;
+            }
+            self.chars.next().unwrap();
+            if !matches!(self.chars.peek(), Some((_, '.'))) {
+                continue;
+            }
+            self.chars.next().unwrap();
+            if matches!(self.chars.peek(), Some((_, '\n'))) {
+                // Data ends with NL '\' '.' NL.
+                self.chars.next().unwrap();
+            } else if !matches!(self.chars.peek(), None) {
+                continue;
+            } else {
+                // Data ends with NL '\' '.' without an extra NL,
+                // which is fine.
+            }
+            // `i` is the character index of the first '\n',
+            // so the data ends at character index i + 1.
+            let span = start..(i + 1);
+            return (self.s(span.clone()), span);
+        }
+        // Data ends at EOF without NL '\' '.' [NL].
+        let span = start..self.src.len();
+        return (self.s(span.clone()), span);
+    }
+
     pub fn next_token(&mut self) -> (Token<'a>, Span) {
         loop {
             let (start, c) = match self.chars.next() {

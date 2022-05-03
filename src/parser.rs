@@ -32,6 +32,7 @@ pub(crate) struct Parser<'a, 'b> {
     pub(crate) arg: usize,
     pub(crate) delimiter: Token<'a>,
     pub(crate) options: &'b ParseOptions,
+    pub(crate) permit_compound_statements: bool,
 }
 
 pub(crate) fn decode_single_quoted_string(s: &str) -> Cow<'_, str> {
@@ -101,6 +102,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             arg: 0,
             delimiter: Token::SemiColon,
             options,
+            permit_compound_statements: false,
         }
     }
 
@@ -177,6 +179,14 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(ans)
     }
 
+    pub(crate) fn read_from_stdin_and_next(&mut self) -> (&'a str, Span) {
+        let stdin = self.lexer.read_from_stdin();
+        let (token, span) = self.lexer.next_token();
+        self.token = token;
+        self.span = span;
+        stdin
+    }
+
     pub(crate) fn next(&mut self) {
         let (token, span) = self.lexer.next_token();
         self.token = token;
@@ -238,6 +248,9 @@ impl<'a, 'b> Parser<'a, 'b> {
                     ));
                 }
                 Ok(Identifier::new(v, self.consume()))
+            }
+            Token::DoubleQuotedString(v) if self.options.dialect.is_postgresql() => {
+                Ok(Identifier::new(*v, self.consume()))
             }
             _ => self.expected_failure("identifier"),
         }
