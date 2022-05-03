@@ -327,6 +327,8 @@ pub enum Expression<'a> {
     String(SString<'a>),
     /// Literal integer expression
     Integer((u64, Span)),
+    /// Literal _LIST_
+    ListHack((usize, Span)),
     /// Literal floating point expression
     Float((f64, Span)),
     /// Function call expression,
@@ -402,6 +404,7 @@ impl<'a> Spanned for Expression<'a> {
             Expression::String(v) => v.span(),
             Expression::Integer(v) => v.span(),
             Expression::Float(v) => v.span(),
+            Expression::ListHack((_, s)) => s.span(),
             Expression::Function(_, b, c) => c.join_span(b),
             Expression::Identifier(v) => v.opt_span().expect("Span of identifier parts"),
             Expression::Arg(v) => v.span(),
@@ -995,7 +998,14 @@ pub(crate) fn parse_expression<'a, 'b>(
             Token::Ident(_, Keyword::NULL) => {
                 r.shift_expr(Expression::Null(parser.consume_keyword(Keyword::NULL)?))
             }
-
+            Token::Ident(_, Keyword::_LIST_) if parser.options.list_hack => {
+                let arg = parser.arg;
+                parser.arg += 1;
+                r.shift_expr(Expression::ListHack((
+                    arg,
+                    parser.consume_keyword(Keyword::_LIST_)?,
+                )))
+            }
             Token::SingleQuotedString(_) | Token::DoubleQuotedString(_) => {
                 r.shift_expr(Expression::String(parser.consume_string()?))
             }

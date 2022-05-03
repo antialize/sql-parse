@@ -80,6 +80,7 @@ impl Default for Keyword {
 }
 
 keywords![
+_LIST_
 ABS
 ACCESSIBLE
 ACCOUNT

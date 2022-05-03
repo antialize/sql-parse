@@ -123,6 +123,7 @@ pub struct ParseOptions {
     arguments: SQLArguments,
     warn_unquoted_identifiers: bool,
     warn_none_capital_keywords: bool,
+    list_hack: bool,
 }
 
 impl Default for ParseOptions {
@@ -132,6 +133,7 @@ impl Default for ParseOptions {
             arguments: SQLArguments::None,
             warn_none_capital_keywords: false,
             warn_unquoted_identifiers: false,
+            list_hack: false,
         }
     }
 }
@@ -165,6 +167,11 @@ impl ParseOptions {
             warn_none_capital_keywords,
             ..self
         }
+    }
+
+    /// Parse _LIST_ as special expression
+    pub fn list_hack(self, list_hack: bool) -> Self {
+        Self { list_hack, ..self }
     }
 }
 

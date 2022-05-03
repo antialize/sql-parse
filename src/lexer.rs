@@ -157,11 +157,16 @@ impl<'a> Lexer<'a> {
     /// The trailing '\' '.' NL is consumed but not returned.
     pub fn read_from_stdin(&mut self) -> (&'a str, Span) {
         // Skip optional spaces.
-        while self.chars.peek().filter(|(_, c)| *c != '\n' && c.is_ascii_whitespace()).is_some() {
+        while self
+            .chars
+            .peek()
+            .filter(|(_, c)| *c != '\n' && c.is_ascii_whitespace())
+            .is_some()
+        {
             self.chars.next().unwrap();
         }
         let start = match self.chars.peek() {
-            Some((i, '\n')) => i+1,
+            Some((i, '\n')) => i + 1,
             Some((i, _)) => *i,
             None => {
                 let span = self.src.len()..self.src.len();

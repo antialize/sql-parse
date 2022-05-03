@@ -204,10 +204,9 @@ pub(crate) fn parse_data_type<'a, 'b>(
     parser: &mut Parser<'a, 'b>,
 ) -> Result<DataType<'a>, ParseError> {
     let (identifier, type_) = match &parser.token {
-        Token::Ident(_, Keyword::BOOLEAN) => (
-            parser.consume_keyword(Keyword::BOOLEAN)?,
-            Type::Boolean,
-        ),
+        Token::Ident(_, Keyword::BOOLEAN) => {
+            (parser.consume_keyword(Keyword::BOOLEAN)?, Type::Boolean)
+        }
         Token::Ident(_, Keyword::TINYINT) => (
             parser.consume_keyword(Keyword::TINYINT)?,
             Type::TinyInt(parse_width(parser)?),
