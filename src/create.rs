@@ -693,7 +693,7 @@ impl Spanned for TriggerEvent {
 /// DELIMITER ;";
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
+/// # assert_eq!(&issues, &[]);
 /// #
 /// let create: CreateTrigger = match stmts.pop() {
 ///     Some(Statement::CreateTrigger(c)) => c,
