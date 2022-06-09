@@ -88,6 +88,7 @@ pub enum Type<'a> {
     Integer(Option<(usize, Span)>),
     Int(Option<(usize, Span)>),
     BigInt(Option<(usize, Span)>),
+    Char(Option<(usize, Span)>),
     VarChar(Option<(usize, Span)>),
     TinyText(Option<(usize, Span)>),
     MediumText(Option<(usize, Span)>),
@@ -119,6 +120,7 @@ impl<'a> OptSpanned for Type<'a> {
             Type::Integer(v) => v.opt_span(),
             Type::Int(v) => v.opt_span(),
             Type::BigInt(v) => v.opt_span(),
+            Type::Char(v) => v.opt_span(),
             Type::VarChar(v) => v.opt_span(),
             Type::TinyText(v) => v.opt_span(),
             Type::MediumText(v) => v.opt_span(),
@@ -230,6 +232,10 @@ pub(crate) fn parse_data_type<'a, 'b>(
         Token::Ident(_, Keyword::TINYTEXT) => (
             parser.consume_keyword(Keyword::TINYTEXT)?,
             Type::TinyText(parse_width(parser)?),
+        ),
+        Token::Ident(_, Keyword::CHAR) => (
+            parser.consume_keyword(Keyword::CHAR)?,
+            Type::Char(parse_width(parser)?),
         ),
         Token::Ident(_, Keyword::TEXT) => (
             parser.consume_keyword(Keyword::TEXT)?,

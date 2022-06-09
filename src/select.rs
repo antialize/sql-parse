@@ -419,7 +419,19 @@ impl OptSpanned for OrderFlag {
 ///     _ => panic!("We should get an select statement")
 /// };
 ///
-/// println!("{:#?}", s.where_)
+/// println!("{:#?}", s.where_);
+///
+/// let sql = "SELECT CAST(NULL AS CHAR)";
+/// let stmt = parse_statement(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: Select = match stmt {
+///     Some(Statement::Select(s)) => s,
+///     _ => panic!("We should get an select statement")
+/// };
+///
+/// println!("{:#?}", s.where_);
 /// ```
 #[derive(Debug, Clone)]
 pub struct Select<'a> {
