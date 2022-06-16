@@ -88,7 +88,7 @@ pub use expression::{
     BinaryOperator, Expression, Function, IdentifierPart, Is, UnaryOperator, When,
 };
 pub use insert_replace::{InsertReplace, InsertReplaceFlag, InsertReplaceType};
-pub use select::{JoinSpecification, JoinType, Select, SelectFlag, TableReference};
+pub use select::{JoinSpecification, JoinType, Select, SelectExpr, SelectFlag, TableReference};
 pub use update::{Update, UpdateFlag};
 
 /// What sql diarect to parse as

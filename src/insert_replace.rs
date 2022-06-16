@@ -17,7 +17,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    select::{parse_select, Select},
+    select::{parse_select, parse_select_expr, Select, SelectExpr},
     Identifier, Issue, OptSpanned, Span, Spanned,
 };
 
@@ -118,6 +118,8 @@ pub struct InsertReplace<'a> {
     pub set: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
     /// Updates to execute on duplicate key
     pub on_duplicate_key_update: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
+    /// Span of "RETURNING" and select expressions after "RETURNING", if "RETURNING" is present
+    pub returning: Option<(Span, Vec<SelectExpr<'a>>)>,
 }
 
 impl<'a> Spanned for InsertReplace<'a> {
@@ -130,6 +132,7 @@ impl<'a> Spanned for InsertReplace<'a> {
             .join_span(&self.select)
             .join_span(&self.set)
             .join_span(&self.on_duplicate_key_update)
+            .join_span(&self.returning)
     }
 }
 
@@ -285,8 +288,19 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
         None
     };
 
-    //  [RETURNING select_expr
-    //       [, select_expr ...]]
+    let returning = if let Some(returning_span) = parser.skip_keyword(Keyword::RETURNING) {
+        let mut returning_exprs = Vec::new();
+        loop {
+            returning_exprs.push(parse_select_expr(parser)?);
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        Some((returning_span, returning_exprs))
+    } else {
+        None
+    };
+
     Ok(InsertReplace {
         type_,
         flags,
@@ -297,5 +311,6 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
         select,
         set,
         on_duplicate_key_update,
+        returning,
     })
 }
