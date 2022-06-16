@@ -109,6 +109,7 @@ pub enum Type<'a> {
     Blob(Option<(usize, Span)>),
     LongBlob(Option<(usize, Span)>),
     VarBinary((usize, Span)),
+    Binary(Option<(usize, Span)>),
 }
 
 impl<'a> OptSpanned for Type<'a> {
@@ -141,6 +142,7 @@ impl<'a> OptSpanned for Type<'a> {
             Type::Blob(v) => v.opt_span(),
             Type::LongBlob(v) => v.opt_span(),
             Type::VarBinary(v) => v.opt_span(),
+            Type::Binary(v) => v.opt_span(),
         }
     }
 }
@@ -272,6 +274,10 @@ pub(crate) fn parse_data_type<'a, 'b>(
         Token::Ident(_, Keyword::VARBINARY) => (
             parser.consume_keyword(Keyword::VARBINARY)?,
             Type::VarBinary(parse_width_req(parser)?),
+        ),
+        Token::Ident(_, Keyword::BINARY) => (
+            parser.consume_keyword(Keyword::BINARY)?,
+            Type::Binary(parse_width(parser)?),
         ),
         Token::Ident(_, Keyword::FLOAT8) => {
             (parser.consume_keyword(Keyword::FLOAT8)?, Type::Float8)
