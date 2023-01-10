@@ -449,8 +449,8 @@ pub struct Select<'a> {
     pub where_: Option<(Expression<'a>, Span)>,
     /// Span of "GROUP_BY" and group expression if specified
     pub group_by: Option<(Span, Vec<Expression<'a>>)>,
-    /// Span of having if specified
-    pub having_span: Option<Span>,
+    /// Having expression and span of "HAVING" if specified
+    pub having: Option<(Expression<'a>, Span)>,
     /// Span of window if specified
     pub window_span: Option<Span>,
     /// Span of "ORDER BY" and list of order expression and directions, if specified
@@ -469,7 +469,7 @@ impl<'a> Spanned for Select<'a> {
             .join_span(&self.table_references)
             .join_span(&self.where_)
             .join_span(&self.group_by)
-            .join_span(&self.having_span)
+            .join_span(&self.having)
             .join_span(&self.window_span)
             .join_span(&self.order_by)
             .join_span(&self.limit)
@@ -537,7 +537,7 @@ pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select
                 table_references: None,
                 where_: None,
                 group_by: None,
-                having_span: None,
+                having: None,
                 window_span: None,
                 order_by: None,
                 limit: None,
@@ -576,10 +576,12 @@ pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select
         None
     };
 
-    let having_span = parser.skip_keyword(Keyword::HAVING);
-    if having_span.is_some() {
-        //TODO where_condition
-    }
+    let having = if let Some(span) = parser.skip_keyword(Keyword::HAVING) {
+        Some((parse_expression(parser, false)?, span))
+    } else {
+        None
+    };
+
     let window_span = parser.skip_keyword(Keyword::WINDOW);
     if window_span.is_some() {
         //TODO window_name AS (window_spec) [, window_name AS (window_spec)] ...]
@@ -655,7 +657,7 @@ pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select
         table_references: Some(table_references),
         where_,
         group_by,
-        having_span,
+        having,
         window_span,
         order_by,
         limit,
