@@ -387,6 +387,15 @@ pub enum Expression<'a> {
         /// Expression to count
         expr: Box<Expression<'a>>,
     },
+    /// Count expression
+    GroupConcat {
+        /// Span of "GROUP_CONCAT"
+        group_concat_span: Span,
+        /// Span of "DISTINCT" if specified
+        distinct_span: Option<Span>,
+        /// Expression to count
+        expr: Box<Expression<'a>>,
+    },
 }
 
 impl<'a> Spanned for Expression<'a> {
@@ -439,6 +448,11 @@ impl<'a> Spanned for Expression<'a> {
                 distinct_span,
                 expr,
             } => count_span.join_span(distinct_span).join_span(expr),
+            Expression::GroupConcat {
+                group_concat_span,
+                distinct_span,
+                expr,
+            } => group_concat_span.join_span(distinct_span).join_span(expr),
         }
     }
 }
@@ -1050,6 +1064,30 @@ pub(crate) fn parse_expression<'a, 'b>(
                     })
                 } else {
                     r.shift_expr(Expression::Invalid(count_span))
+                }
+            }
+            Token::Ident(_, Keyword::GROUP_CONCAT) => {
+                let group_concat_span = parser.consume_keyword(Keyword::GROUP_CONCAT)?;
+                parser.consume_token(Token::LParen)?;
+                let distinct_span = parser.skip_keyword(Keyword::DISTINCT);
+                let expr = parser.recovered("')'", &|t| matches!(t, Token::RParen), |parser| {
+                    let expr = parse_expression_outer(parser)?;
+                    Ok(Some(expr))
+                })?;
+                // TODO
+                // [ORDER BY {unsigned_integer | col_name | expr}
+                //     [ASC | DESC] [,col_name ...]]
+                // [SEPARATOR str_val]
+                // [LIMIT {[offset,] row_count | row_count OFFSET offset}])
+                parser.consume_token(Token::RParen)?;
+                if let Some(expr) = expr {
+                    r.shift_expr(Expression::GroupConcat {
+                        group_concat_span,
+                        distinct_span,
+                        expr: Box::new(expr),
+                    })
+                } else {
+                    r.shift_expr(Expression::Invalid(group_concat_span))
                 }
             }
             Token::Ident(_, k) if k.expr_ident() => {
