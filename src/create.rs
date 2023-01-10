@@ -1,5 +1,3 @@
-use core::marker::PhantomData;
-
 use alloc::{boxed::Box, vec::Vec};
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +18,7 @@ use crate::{
     parser::{ParseError, Parser},
     select::{parse_select, Select},
     statement::parse_statement,
-    DataType, Identifier, SString, Span, Spanned, Statement,
+    DataType, Identifier, Issue, SString, Span, Spanned, Statement,
 };
 
 /// Options on created table
@@ -174,6 +172,10 @@ pub enum CreateDefinition<'a> {
         /// Datatype and options for column
         data_type: DataType<'a>,
     },
+    ConstraintDefinition {
+        span: Span,
+        identifier: Identifier<'a>,
+    },
 }
 
 impl<'a> Spanned for CreateDefinition<'a> {
@@ -183,6 +185,9 @@ impl<'a> Spanned for CreateDefinition<'a> {
                 identifier,
                 data_type,
             } => identifier.span().join_span(data_type),
+            CreateDefinition::ConstraintDefinition { span, identifier } => {
+                span.join_span(identifier)
+            }
         }
     }
 }
@@ -348,13 +353,49 @@ impl<'a> Spanned for CreateView<'a> {
     }
 }
 
+pub(crate) fn parse_create_constraint_definition<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+) -> Result<CreateDefinition<'a>, ParseError> {
+    let span = parser.consume_keyword(Keyword::CONSTRAINT)?;
+    let identifier = parser.consume_plain_identifier()?;
+    parser.consume_keywords(&[Keyword::FOREIGN, Keyword::KEY])?;
+    parser.consume_token(Token::LParen)?;
+    parser.consume_plain_identifier()?;
+    parser.consume_token(Token::RParen)?;
+    parser.consume_keyword(Keyword::REFERENCES)?;
+    parser.consume_plain_identifier()?;
+    parser.consume_token(Token::LParen)?;
+    parser.consume_plain_identifier()?;
+    parser.consume_token(Token::RParen)?;
+    if let Some(_) = parser.skip_keyword(Keyword::ON) {
+        parser.consume_keyword(Keyword::DELETE)?;
+        match parser.token {
+            Token::Ident(_, Keyword::CASCADE) => {
+                parser.consume_keyword(Keyword::CASCADE)?;
+            }
+            Token::Ident(_, Keyword::DELETE) => {
+                parser.consume_keyword(Keyword::DELETE)?;
+            }
+            Token::Ident(_, Keyword::RESTRICT) => {
+                parser.consume_keyword(Keyword::RESTRICT)?;
+            }
+            Token::Ident(_, Keyword::SET) => {
+                parser.consume_keywords(&[Keyword::SET, Keyword::NULL])?;
+            }
+            _ => parser.expected_failure("CASCADE, DELETE OR SET NULL")?,
+        }
+    }
+    Ok(CreateDefinition::ConstraintDefinition { span, identifier })
+}
+
 pub(crate) fn parse_create_definition<'a, 'b>(
     parser: &mut Parser<'a, 'b>,
 ) -> Result<CreateDefinition<'a>, ParseError> {
     match &parser.token {
+        Token::Ident(_, Keyword::CONSTRAINT) => parse_create_constraint_definition(parser),
         Token::Ident(_, _) => Ok(CreateDefinition::ColumnDefinition {
             identifier: parser.consume_plain_identifier()?,
-            data_type: parse_data_type(parser)?,
+            data_type: parse_data_type(parser, false)?,
         }),
         _ => parser.expected_failure("identifier"),
     }
@@ -401,6 +442,7 @@ fn parse_create_view<'a, 'b>(
 #[derive(Clone, Debug)]
 pub enum FunctionCharacteristic<'a> {
     LanguageSql(Span),
+    LanguagePlpgsql(Span),
     NotDeterministic(Span),
     Deterministic(Span),
     ContainsSql(Span),
@@ -425,6 +467,7 @@ impl<'a> Spanned for FunctionCharacteristic<'a> {
             FunctionCharacteristic::SqlSecurityDefiner(v) => v.span(),
             FunctionCharacteristic::SqlSecurityUser(v) => v.span(),
             FunctionCharacteristic::Comment(v) => v.span(),
+            FunctionCharacteristic::LanguagePlpgsql(v) => v.span(),
         }
     }
 }
@@ -489,7 +532,7 @@ pub struct CreateFunction<'a> {
     /// Name o created function
     pub name: Identifier<'a>,
     /// Names and types of function arguments
-    pub params: Vec<(FunctionParamDirection, Identifier<'a>, DataType<'a>)>,
+    pub params: Vec<(Option<FunctionParamDirection>, Identifier<'a>, DataType<'a>)>,
     /// Span of "RETURNS"
     pub returns_span: Span,
     /// Type of return value
@@ -497,7 +540,7 @@ pub struct CreateFunction<'a> {
     /// Characteristics of created function
     pub characteristics: Vec<FunctionCharacteristic<'a>>,
     /// Statement computing return value
-    pub return_: Box<Statement<'a>>,
+    pub return_: Option<Box<Statement<'a>>>,
 }
 
 impl<'a> Spanned for CreateFunction<'a> {
@@ -539,22 +582,26 @@ fn parse_create_function<'a, 'b>(
                 Token::Ident(_, Keyword::IN) => {
                     let in_ = parser.consume_keyword(Keyword::IN)?;
                     if let Some(out) = parser.skip_keyword(Keyword::OUT) {
-                        FunctionParamDirection::InOut(in_.join_span(&out))
+                        Some(FunctionParamDirection::InOut(in_.join_span(&out)))
                     } else {
-                        FunctionParamDirection::In(in_)
+                        Some(FunctionParamDirection::In(in_))
                     }
                 }
-                Token::Ident(_, Keyword::OUT) => {
-                    FunctionParamDirection::Out(parser.consume_keyword(Keyword::OUT)?)
-                }
-                Token::Ident(_, Keyword::INOUT) => {
-                    FunctionParamDirection::InOut(parser.consume_keyword(Keyword::INOUT)?)
-                }
-                _ => parser.expected_failure("'IN', 'OUT' or 'INOUT'")?,
+                Token::Ident(_, Keyword::OUT) => Some(FunctionParamDirection::Out(
+                    parser.consume_keyword(Keyword::OUT)?,
+                )),
+                Token::Ident(_, Keyword::INOUT) => Some(FunctionParamDirection::InOut(
+                    parser.consume_keyword(Keyword::INOUT)?,
+                )),
+                _ => None,
             };
 
+            if parser.options.dialect.is_maria() && direction.is_none() {
+                parser.expected_error("'IN', 'OUT' or 'INOUT'");
+            }
+
             let name = parser.consume_plain_identifier()?;
-            let type_ = parse_data_type(parser)?;
+            let type_ = parse_data_type(parser, false)?;
             params.push((direction, name, type_));
             if parser.skip_token(Token::Comma).is_none() {
                 break;
@@ -564,13 +611,39 @@ fn parse_create_function<'a, 'b>(
     })?;
     parser.consume_token(Token::RParen)?;
     let returns_span = parser.consume_keyword(Keyword::RETURNS)?;
-    let return_type = parse_data_type(parser)?;
+    let return_type = parse_data_type(parser, true)?;
+    if parser.options.dialect.is_postgresql() {
+        if let Some(_) = parser.skip_keyword(Keyword::AS) {
+            parser.consume_token(Token::DoubleDollar)?;
+            loop {
+                match &parser.token {
+                    Token::Eof | Token::DoubleDollar => {
+                        parser.consume_token(Token::DoubleDollar)?;
+                        break;
+                    }
+                    _ => {
+                        parser.consume();
+                    }
+                }
+            }
+        }
+    }
+
     let mut characteristics = Vec::new();
     loop {
         let f = match &parser.token {
-            Token::Ident(_, Keyword::LANGUAGE) => FunctionCharacteristic::LanguageSql(
-                parser.consume_keywords(&[Keyword::LANGUAGE, Keyword::SQL])?,
-            ),
+            Token::Ident(_, Keyword::LANGUAGE) => {
+                let lg = parser.consume();
+                match &parser.token {
+                    Token::Ident(_, Keyword::SQL) => {
+                        FunctionCharacteristic::LanguageSql(lg.join_span(&parser.consume()))
+                    }
+                    Token::Ident(_, Keyword::PLPGSQL) => {
+                        FunctionCharacteristic::LanguagePlpgsql(lg.join_span(&parser.consume()))
+                    }
+                    _ => parser.expected_failure("language name")?,
+                }
+            }
             Token::Ident(_, Keyword::NOT) => FunctionCharacteristic::NotDeterministic(
                 parser.consume_keywords(&[Keyword::NOT, Keyword::DETERMINISTIC])?,
             ),
@@ -620,9 +693,13 @@ fn parse_create_function<'a, 'b>(
         characteristics.push(f);
     }
 
-    let return_ = match parse_statement(parser)? {
-        Some(v) => Box::new(v),
-        None => parser.expected_failure("statement")?,
+    let return_ = if parser.options.dialect.is_maria() {
+        match parse_statement(parser)? {
+            Some(v) => Some(Box::new(v)),
+            None => parser.expected_failure("statement")?,
+        }
+    } else {
+        None
     };
 
     Ok(Statement::CreateFunction(CreateFunction {
@@ -821,6 +898,74 @@ fn parse_create_trigger<'a, 'b>(
 }
 
 #[derive(Clone, Debug)]
+pub struct CreateTypeEnum<'a> {
+    /// Span of "CREATE"
+    pub create_span: Span,
+    /// Options after "CREATE"
+    pub create_options: Vec<CreateOption<'a>>,
+    /// Span of "TYPE"
+    pub type_span: Span,
+    /// Name of the created type
+    pub name: Identifier<'a>,
+    /// Span of "AS ENUM"
+    pub as_enum_span: Span,
+    /// Enum values
+    pub values: Vec<SString<'a>>,
+}
+
+impl<'a> Spanned for CreateTypeEnum<'a> {
+    fn span(&self) -> Span {
+        self.create_span
+            .join_span(&self.create_options)
+            .join_span(&self.type_span)
+            .join_span(&self.name)
+            .join_span(&self.as_enum_span)
+            .join_span(&self.values)
+    }
+}
+
+fn parse_create_type<'a, 'b>(
+    parser: &mut Parser<'a, 'b>,
+    create_span: Span,
+    create_options: Vec<CreateOption<'a>>,
+) -> Result<Statement<'a>, ParseError> {
+    let type_span = parser.consume_keyword(Keyword::TYPE)?;
+    if !parser.options.dialect.is_postgresql() {
+        parser.issues.push(Issue::err(
+            "CREATE TYPE only supported by postgresql",
+            &type_span,
+        ));
+    }
+    let name = parser.consume_plain_identifier()?;
+    let as_enum_span = parser.consume_keywords(&[Keyword::AS, Keyword::ENUM])?;
+    parser.consume_token(Token::LParen)?;
+    let mut values = Vec::new();
+    loop {
+        parser.recovered(
+            "')' or ','",
+            &|t| matches!(t, Token::RParen | Token::Comma),
+            |parser| {
+                values.push(parser.consume_string()?);
+                Ok(())
+            },
+        )?;
+        if matches!(parser.token, Token::RParen) {
+            break;
+        }
+        parser.consume_token(Token::Comma)?;
+    }
+    parser.consume_token(Token::RParen)?;
+    Ok(Statement::CreateTypeEnum(CreateTypeEnum {
+        create_span,
+        create_options,
+        type_span,
+        name,
+        as_enum_span,
+        values,
+    }))
+}
+
+#[derive(Clone, Debug)]
 pub enum CreateIndexOption {
     UsingGist(Span),
 }
@@ -835,16 +980,17 @@ impl Spanned for CreateIndexOption {
 
 #[derive(Clone, Debug)]
 pub struct CreateIndex<'a> {
-    create_span: Span,
-    create_options: Vec<CreateOption<'a>>,
-    index_span: Span,
-    index_name: Identifier<'a>,
-    on_span: Span,
-    table_name: Identifier<'a>,
-    index_options: Vec<CreateIndexOption>,
-    l_paren_span: Span,
-    column_name: Identifier<'a>,
-    r_paren_span: Span,
+    pub create_span: Span,
+    pub create_options: Vec<CreateOption<'a>>,
+    pub index_span: Span,
+    pub index_name: Identifier<'a>,
+    pub if_not_exists: Option<Span>,
+    pub on_span: Span,
+    pub table_name: Identifier<'a>,
+    pub index_options: Vec<CreateIndexOption>,
+    pub l_paren_span: Span,
+    pub column_name: Identifier<'a>,
+    pub r_paren_span: Span,
 }
 
 impl<'a> Spanned for CreateIndex<'a> {
@@ -868,6 +1014,11 @@ fn parse_create_index<'a, 'b>(
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
     let index_span = parser.consume_keyword(Keyword::INDEX)?;
+    let if_not_exists = if let Some(s) = parser.skip_keyword(Keyword::IF) {
+        Some(s.join_span(&parser.consume_keywords(&[Keyword::NOT, Keyword::EXISTS])?))
+    } else {
+        None
+    };
     let index_name = parser.consume_plain_identifier()?;
     let on_span = parser.consume_keyword(Keyword::ON)?;
     let table_name = parser.consume_plain_identifier()?;
@@ -886,6 +1037,7 @@ fn parse_create_index<'a, 'b>(
         create_options,
         index_span,
         index_name,
+        if_not_exists,
         on_span,
         table_name,
         index_options,
@@ -1040,7 +1192,7 @@ pub(crate) fn parse_create<'a, 'b>(
     parser.consume_keyword(Keyword::CREATE)?;
 
     let mut create_options = Vec::new();
-    const CREATABLE: &str = "'TABLE' | 'VIEW' | 'TRIGGER' | 'FUNCTION' | 'INDEX'";
+    const CREATABLE: &str = "'TABLE' | 'VIEW' | 'TRIGGER' | 'FUNCTION' | 'INDEX' | 'TYPE'";
 
     parser.recovered(
         CREATABLE,
@@ -1054,6 +1206,7 @@ pub(crate) fn parse_create<'a, 'b>(
                         | Keyword::TRIGGER
                         | Keyword::FUNCTION
                         | Keyword::INDEX
+                        | Keyword::TYPE
                 )
             )
         },
@@ -1129,6 +1282,7 @@ pub(crate) fn parse_create<'a, 'b>(
         Token::Ident(_, Keyword::TRIGGER) => {
             parse_create_trigger(parser, create_span, create_options)
         }
+        Token::Ident(_, Keyword::TYPE) => parse_create_type(parser, create_span, create_options),
         _ => parser.expected_failure(CREATABLE),
     }
 }

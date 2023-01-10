@@ -103,6 +103,10 @@ impl SQLDialect {
     fn is_postgresql(&self) -> bool {
         matches!(self, SQLDialect::PostgreSQL)
     }
+
+    fn is_maria(&self) -> bool {
+        matches!(self, SQLDialect::MariaDB)
+    }
 }
 
 /// What kinds or arguments

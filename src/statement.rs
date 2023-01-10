@@ -14,7 +14,10 @@ use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
     alter::{parse_alter, AlterTable},
-    create::{parse_create, CreateFunction, CreateIndex, CreateTable, CreateTrigger, CreateView},
+    create::{
+        parse_create, CreateFunction, CreateIndex, CreateTable, CreateTrigger, CreateTypeEnum,
+        CreateView,
+    },
     delete::{parse_delete, Delete},
     drop::{
         parse_drop, DropDatabase, DropEvent, DropFunction, DropProcedure, DropServer, DropTable,
@@ -118,10 +121,23 @@ fn parse_block<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<Statement<'a>>
     parser.consume_keyword(Keyword::BEGIN)?;
     let mut ans = Vec::new();
     parser.recovered(
-        "'END'",
-        &|e| matches!(e, Token::Ident(_, Keyword::END)),
+        "'END' | 'EXCEPTION'",
+        &|e| {
+            matches!(
+                e,
+                Token::Ident(_, Keyword::END) | Token::Ident(_, Keyword::EXCEPTION)
+            )
+        },
         |parser| parse_statement_list(parser, &mut ans),
     )?;
+    if let Some(_exception_span) = parser.skip_keyword(Keyword::EXCEPTION) {
+        while let Some(_when_span) = parser.skip_keyword(Keyword::WHEN) {
+            parser.consume_plain_identifier()?;
+            parser.consume_keyword(Keyword::THEN)?;
+            parse_expression(parser, true)?;
+            parser.consume_token(Token::SemiColon)?;
+        }
+    }
     parser.consume_keyword(Keyword::END)?;
     Ok(ans)
 }
@@ -252,6 +268,8 @@ pub enum Statement<'a> {
     Case(CaseStatement<'a>),
     Copy(Copy<'a>),
     Stdin(&'a str, Span),
+    CreateTypeEnum(CreateTypeEnum<'a>),
+    Do(Vec<Statement<'a>>),
 }
 
 impl<'a> Spanned for Statement<'a> {
@@ -287,6 +305,8 @@ impl<'a> Spanned for Statement<'a> {
             Statement::End(s) => s.clone(),
             Statement::Commit(s) => s.clone(),
             Statement::StartTransaction(s) => s.clone(),
+            Statement::CreateTypeEnum(v) => v.span(),
+            Statement::Do(v) => v.opt_span().expect("Span of block"),
         }
     }
 }
@@ -327,8 +347,17 @@ pub(crate) fn parse_statement<'a, 'b>(
         Token::Ident(_, Keyword::ALTER) => Some(parse_alter(parser)?),
         Token::Ident(_, Keyword::CASE) => Some(Statement::Case(parse_case_statement(parser)?)),
         Token::Ident(_, Keyword::COPY) => Some(Statement::Copy(parse_copy_statement(parser)?)),
+        Token::Ident(_, Keyword::DO) => Some(parse_do(parser)?),
         _ => None,
     })
+}
+
+pub(crate) fn parse_do<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statement<'a>, ParseError> {
+    parser.consume_keyword(Keyword::DO)?;
+    parser.consume_token(Token::DoubleDollar)?;
+    let block = parse_block(parser)?;
+    parser.consume_token(Token::DoubleDollar)?;
+    Ok(Statement::Do(block))
 }
 
 /// When part of case statement

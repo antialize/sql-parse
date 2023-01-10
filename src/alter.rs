@@ -190,6 +190,13 @@ pub enum AlterSpecification<'a> {
         /// New definition of column
         definition: DataType<'a>,
     },
+    /// Modify a column
+    OwnerTo {
+        // Span of "OWNER TO"
+        span: Span,
+        /// Name of owner
+        owner: Identifier<'a>,
+    },
 }
 
 impl<'a> Spanned for AlterSpecification<'a> {
@@ -245,6 +252,7 @@ impl<'a> Spanned for AlterSpecification<'a> {
                 .join_span(if_exists)
                 .join_span(col)
                 .join_span(definition),
+            AlterSpecification::OwnerTo { span, owner } => span.join_span(owner),
         }
     }
 }
@@ -500,7 +508,7 @@ fn parse_add_alter_specification<'a, 'b>(
         Token::Ident(_, Keyword::COLUMN) => {
             parser.consume_keyword(Keyword::COLUMN)?;
             let identifier = parser.consume_plain_identifier()?;
-            let data_type = parse_data_type(parser)?;
+            let data_type = parse_data_type(parser, false)?;
             Ok(AlterSpecification::AddColumn {
                 add_span,
                 identifier,
@@ -593,7 +601,7 @@ fn parse_alter_table<'a, 'b>(
                         None
                     };
                     let col = parser.consume_plain_identifier()?;
-                    let definition = parse_data_type(parser)?;
+                    let definition = parse_data_type(parser, false)?;
                     // TODO [FIRST | AFTER col_name]
                     AlterSpecification::Modify {
                         modify_span,
@@ -601,6 +609,11 @@ fn parse_alter_table<'a, 'b>(
                         col,
                         definition,
                     }
+                }
+                Token::Ident(_, Keyword::OWNER) => {
+                    let span = parser.consume_keywords(&[Keyword::OWNER, Keyword::TO])?;
+                    let owner = parser.consume_plain_identifier()?;
+                    AlterSpecification::OwnerTo { span, owner }
                 }
                 _ => parser.expected_failure("alter specification")?,
             });

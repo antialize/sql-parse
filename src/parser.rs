@@ -246,6 +246,12 @@ impl<'a, 'b> Parser<'a, 'b> {
                         format!("identifiers should be quoted as `{}`", v),
                         &self.span,
                     ));
+                } else if kw == &Keyword::QUOTED_IDENTIFIER && self.options.dialect.is_postgresql()
+                {
+                    self.issues.push(Issue::err(
+                        format!("quoted identifiers not supported by postgresql"),
+                        &self.span,
+                    ));
                 }
                 Ok(Identifier::new(v, self.consume()))
             }

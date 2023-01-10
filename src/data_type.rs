@@ -40,7 +40,9 @@ pub enum DataTypeProperty<'a> {
     UniqueKey(Span),
     GeneratedAlways(Span),
     AutoIncrement(Span),
+    PrimaryKey(Span),
     As((Span, Box<Expression<'a>>)),
+    Check((Span, Box<Expression<'a>>)),
 }
 
 impl<'a> Spanned for DataTypeProperty<'a> {
@@ -63,6 +65,8 @@ impl<'a> Spanned for DataTypeProperty<'a> {
             DataTypeProperty::GeneratedAlways(v) => v.span(),
             DataTypeProperty::AutoIncrement(v) => v.span(),
             DataTypeProperty::As((s, v)) => s.join_span(v),
+            DataTypeProperty::Check((s, v)) => s.join_span(v),
+            DataTypeProperty::PrimaryKey(v) => v.span(),
         }
     }
 }
@@ -102,6 +106,7 @@ pub enum Type<'a> {
     Numeric(usize, usize, Span),
     DateTime(Option<(usize, Span)>),
     Timestamp(Timestamp),
+    Timestamptz,
     Time(Option<(usize, Span)>),
     TinyBlob(Option<(usize, Span)>),
     MediumBlob(Option<(usize, Span)>),
@@ -110,6 +115,10 @@ pub enum Type<'a> {
     LongBlob(Option<(usize, Span)>),
     VarBinary((usize, Span)),
     Binary(Option<(usize, Span)>),
+    Named(Span),
+    Json,
+    Bit(usize, Span),
+    Bytea,
 }
 
 impl<'a> OptSpanned for Type<'a> {
@@ -143,6 +152,11 @@ impl<'a> OptSpanned for Type<'a> {
             Type::LongBlob(v) => v.opt_span(),
             Type::VarBinary(v) => v.opt_span(),
             Type::Binary(v) => v.opt_span(),
+            Type::Timestamptz => None,
+            Type::Named(v) => v.opt_span(),
+            Type::Json => None,
+            Type::Bit(_, b) => b.opt_span(),
+            Type::Bytea => None,
         }
     }
 }
@@ -206,6 +220,7 @@ fn parse_enum_set_values<'a, 'b>(
 
 pub(crate) fn parse_data_type<'a, 'b>(
     parser: &mut Parser<'a, 'b>,
+    no_as: bool,
 ) -> Result<DataType<'a>, ParseError> {
     let (identifier, type_) = match &parser.token {
         Token::Ident(_, Keyword::BOOLEAN) => {
@@ -315,6 +330,10 @@ pub(crate) fn parse_data_type<'a, 'b>(
             parser.consume_keyword(Keyword::TIME)?,
             Type::Time(parse_width(parser)?),
         ),
+        Token::Ident(_, Keyword::TIMESTAMPTZ) => (
+            parser.consume_keyword(Keyword::TIMESTAMPTZ)?,
+            Type::Timestamptz,
+        ),
         Token::Ident(_, Keyword::TIMESTAMP) => {
             let timestamp_span = parser.consume_keyword(Keyword::TIMESTAMP)?;
             let width = parse_width(parser)?;
@@ -339,6 +358,17 @@ pub(crate) fn parse_data_type<'a, 'b>(
             parser.consume_keyword(Keyword::SET)?,
             Type::Set(parse_enum_set_values(parser)?),
         ),
+        Token::Ident(_, Keyword::JSON) => (parser.consume_keyword(Keyword::JSON)?, Type::Json),
+        Token::Ident(_, Keyword::BYTEA) => (parser.consume_keyword(Keyword::BYTEA)?, Type::Bytea),
+        Token::Ident(_, Keyword::BIT) => {
+            let t = parser.consume_keyword(Keyword::BIT)?;
+            let (w, ws) = parse_width_req(parser)?;
+            (t, Type::Bit(w, ws))
+        }
+        Token::Ident(_, _) if parser.options.dialect.is_postgresql() => {
+            let name = parser.consume();
+            (name.clone(), Type::Named(name))
+        }
         _ => parser.expected_failure("type")?,
     };
     let mut properties = Vec::new();
@@ -405,11 +435,22 @@ pub(crate) fn parse_data_type<'a, 'b>(
                 }
             }
             Token::Ident(_, Keyword::GENERATED) => {
-                properties.push(DataTypeProperty::GeneratedAlways(
-                    parser.consume_keywords(&[Keyword::GENERATED, Keyword::ALWAYS])?,
-                ))
+                if parser.options.dialect.is_postgresql() {
+                    properties.push(DataTypeProperty::GeneratedAlways(parser.consume_keywords(
+                        &[
+                            Keyword::GENERATED,
+                            Keyword::ALWAYS,
+                            Keyword::AS,
+                            Keyword::IDENTITY,
+                        ],
+                    )?))
+                } else {
+                    properties.push(DataTypeProperty::GeneratedAlways(
+                        parser.consume_keywords(&[Keyword::GENERATED, Keyword::ALWAYS])?,
+                    ))
+                }
             }
-            Token::Ident(_, Keyword::AS) => {
+            Token::Ident(_, Keyword::AS) if !no_as => {
                 let span = parser.consume_keyword(Keyword::AS)?;
                 let s1 = parser.consume_token(Token::LParen)?;
                 let e = parser.recovered(")", &|t| t == &Token::RParen, |parser| {
@@ -418,6 +459,19 @@ pub(crate) fn parse_data_type<'a, 'b>(
                 let s2 = parser.consume_token(Token::RParen)?;
                 let e = e.unwrap_or_else(|| Expression::Invalid(s1.join_span(&s2)));
                 properties.push(DataTypeProperty::As((span, Box::new(e))));
+            }
+            Token::Ident(_, Keyword::PRIMARY) => properties.push(DataTypeProperty::PrimaryKey(
+                parser.consume_keywords(&[Keyword::PRIMARY, Keyword::KEY])?,
+            )),
+            Token::Ident(_, Keyword::CHECK) => {
+                let span = parser.consume_keyword(Keyword::CHECK)?;
+                let s1 = parser.consume_token(Token::LParen)?;
+                let e = parser.recovered(")", &|t| t == &Token::RParen, |parser| {
+                    Ok(Some(parse_expression(parser, false)?))
+                })?;
+                let s2 = parser.consume_token(Token::RParen)?;
+                let e = e.unwrap_or_else(|| Expression::Invalid(s1.join_span(&s2)));
+                properties.push(DataTypeProperty::Check((span, Box::new(e))));
             }
             _ => break,
         }

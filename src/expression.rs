@@ -1018,7 +1018,7 @@ pub(crate) fn parse_expression<'a, 'b>(
                 let cast = parser.recovered("')'", &|t| matches!(t, Token::RParen), |parser| {
                     let expr = parse_expression_outer(parser)?;
                     let as_span = parser.consume_keyword(Keyword::AS)?;
-                    let type_ = parse_data_type(parser)?;
+                    let type_ = parse_data_type(parser, false)?;
                     Ok(Some((expr, as_span, type_)))
                 })?;
                 parser.consume_token(Token::RParen)?;
