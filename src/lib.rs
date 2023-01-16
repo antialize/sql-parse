@@ -87,7 +87,10 @@ pub use drop::{
 pub use expression::{
     BinaryOperator, Expression, Function, IdentifierPart, Is, UnaryOperator, When,
 };
-pub use insert_replace::{InsertReplace, InsertReplaceFlag, InsertReplaceType};
+pub use insert_replace::{
+    InsertReplace, InsertReplaceFlag, InsertReplaceType, OnConflict, OnConflictAction,
+    OnConflictTarget,
+};
 pub use select::{JoinSpecification, JoinType, Select, SelectExpr, SelectFlag, TableReference};
 pub use update::{Update, UpdateFlag};
 
