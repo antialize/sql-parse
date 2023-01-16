@@ -1143,6 +1143,11 @@ pub(crate) fn parse_expression<'a, 'b>(
                     parser.consume_token(Token::PercentS)?,
                 )))
             }
+            Token::DollarArg(arg)
+                if matches!(parser.options.arguments, crate::SQLArguments::Dollar) =>
+            {
+                r.shift_expr(Expression::Arg((*arg, parser.consume())))
+            }
             Token::LParen => {
                 parser.consume_token(Token::LParen)?;
                 let ans = parse_expression_paren(parser)?;

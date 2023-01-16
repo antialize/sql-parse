@@ -62,6 +62,7 @@ pub(crate) enum Token<'a> {
     Tilde,
     Eof,
     PercentS,
+    DollarArg(usize),
 }
 
 impl<'a> Token<'a> {
@@ -110,6 +111,16 @@ impl<'a> Token<'a> {
             Token::ShiftLeft => "'>>'",
             Token::ShiftRight => "'<<'",
             Token::DoubleDollar => "'$$'",
+            Token::DollarArg(v) if *v == 1 => "'$1'",
+            Token::DollarArg(v) if *v == 2 => "'$2'",
+            Token::DollarArg(v) if *v == 3 => "'$3'",
+            Token::DollarArg(v) if *v == 4 => "'$4'",
+            Token::DollarArg(v) if *v == 5 => "'$5'",
+            Token::DollarArg(v) if *v == 6 => "'$6'",
+            Token::DollarArg(v) if *v == 7 => "'$7'",
+            Token::DollarArg(v) if *v == 8 => "'$8'",
+            Token::DollarArg(v) if *v == 9 => "'$9'",
+            Token::DollarArg(_) => "'$i'",
             Token::SingleQuotedString(_) => "String",
             Token::DoubleQuotedString(_) => "String",
             Token::Spaceship => "'<=>'",
@@ -255,6 +266,16 @@ impl<'a> Lexer<'a> {
                     Some((_, '$')) => {
                         self.chars.next();
                         Token::DoubleDollar
+                    }
+                    Some((_, '1'..='9')) => {
+                        let mut v = self.chars.peek().unwrap().1.to_digit(10).unwrap() as usize;
+                        self.chars.next();
+                        while matches!(self.chars.peek(), Some((_, '0'..='9'))) {
+                            v = v * 10
+                                + self.chars.peek().unwrap().1.to_digit(10).unwrap() as usize;
+                            self.chars.next();
+                        }
+                        Token::DollarArg(v)
                     }
                     _ => Token::Invalid,
                 },

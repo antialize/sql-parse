@@ -118,6 +118,8 @@ pub enum SQLArguments {
     Percent,
     /// Arguments are ?
     QuestionMark,
+    /// Arguments ar #i
+    Dollar,
 }
 
 /// Options used when parsing sql
