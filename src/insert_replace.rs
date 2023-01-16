@@ -56,6 +56,67 @@ impl Spanned for InsertReplaceType {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum OnConflictTarget<'a> {
+    Column {
+        name: Identifier<'a>,
+    },
+    OnConstraint {
+        on_constraint_span: Span,
+        name: Identifier<'a>,
+    },
+}
+
+impl<'a> Spanned for OnConflictTarget<'a> {
+    fn span(&self) -> Span {
+        match self {
+            OnConflictTarget::Column { name } => name.span(),
+            OnConflictTarget::OnConstraint {
+                on_constraint_span: token,
+                name,
+            } => token.join_span(name),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum OnConflictAction<'a> {
+    DoNothing(Span),
+    DoUpdateSet {
+        do_update_set_span: Span,
+        sets: Vec<(Identifier<'a>, Expression<'a>)>,
+        where_: Option<(Span, alloc::boxed::Box<Expression<'a>>)>,
+    },
+}
+
+impl<'a> Spanned for OnConflictAction<'a> {
+    fn span(&self) -> Span {
+        match self {
+            OnConflictAction::DoNothing(span) => span.span(),
+            OnConflictAction::DoUpdateSet {
+                do_update_set_span,
+                sets,
+                where_,
+            } => do_update_set_span.join_span(sets).join_span(where_),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct OnConflict<'a> {
+    pub on_conflict_span: Span,
+    pub target: OnConflictTarget<'a>,
+    pub action: OnConflictAction<'a>,
+}
+
+impl<'a> Spanned for OnConflict<'a> {
+    fn span(&self) -> Span {
+        self.on_conflict_span
+            .join_span(&self.target)
+            .join_span(&self.action)
+    }
+}
+
 /// Representation of Insert or Replace Statement
 ///
 /// ```
@@ -96,8 +157,24 @@ impl Spanned for InsertReplaceType {
 ///
 /// assert!(r.table[0].as_str() == "t2");
 /// println!("{:#?}", r.values.unwrap());
-///
 /// ```
+///
+/// PostgreSQL
+/// ```
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, InsertReplace, InsertReplaceType, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL).arguments(SQLArguments::Dollar);
+/// # let mut issues = Vec::new();
+/// #
+///
+/// let sql4 = "INSERT INTO contractor SELECT * FROM person WHERE status = $1 ON CONFLICT (name) DO NOTHING";
+/// let stmt4 = parse_statement(sql4, &mut issues, &options);
+///
+/// for issue in &issues {
+///     println!("{:#?}", issue);
+/// }
+/// # assert!(issues.is_empty());
+/// ```
+
 #[derive(Clone, Debug)]
 pub struct InsertReplace<'a> {
     /// Span of "INSERT" or "REPLACE"
@@ -116,8 +193,10 @@ pub struct InsertReplace<'a> {
     pub select: Option<Select<'a>>,
     /// Span of "SET" and list of key, value pairs to set if specified
     pub set: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
-    /// Updates to execute on duplicate key
+    /// Updates to execute on duplicate key (mysql)
     pub on_duplicate_key_update: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
+    /// Action to take on duplicate keys (postgresql)
+    pub on_conflict: Option<OnConflict<'a>>,
     /// Span of "RETURNING" and select expressions after "RETURNING", if "RETURNING" is present
     pub returning: Option<(Span, Vec<SelectExpr<'a>>)>,
 }
@@ -132,6 +211,7 @@ impl<'a> Spanned for InsertReplace<'a> {
             .join_span(&self.select)
             .join_span(&self.set)
             .join_span(&self.on_duplicate_key_update)
+            .join_span(&self.on_conflict)
             .join_span(&self.returning)
     }
 }
@@ -266,27 +346,114 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
         }
     }
 
-    let on_duplicate_key_update = if matches!(parser.token, Token::Ident(_, Keyword::ON)) {
-        let on_duplicate_key_update_span = parser.consume_keywords(&[
-            Keyword::ON,
-            Keyword::DUPLICATE,
-            Keyword::KEY,
-            Keyword::UPDATE,
-        ])?;
-        let mut kvps = Vec::new();
-        loop {
-            let col = parser.consume_plain_identifier()?;
-            let eq_token = parser.consume_token(Token::Eq)?;
-            let expr = parse_expression(parser, false)?;
-            kvps.push((col, eq_token, expr));
-            if parser.skip_token(Token::Comma).is_none() {
-                break;
+    let (on_duplicate_key_update, on_conflict) =
+        if matches!(parser.token, Token::Ident(_, Keyword::ON)) {
+            let on = parser.consume_keyword(Keyword::ON)?;
+            match &parser.token {
+                Token::Ident(_, Keyword::DUPLICATE) => {
+                    let on_duplicate_key_update_span =
+                        on.join_span(&parser.consume_keywords(&[
+                            Keyword::DUPLICATE,
+                            Keyword::KEY,
+                            Keyword::UPDATE,
+                        ])?);
+                    let mut kvps = Vec::new();
+                    loop {
+                        let col = parser.consume_plain_identifier()?;
+                        let eq_token = parser.consume_token(Token::Eq)?;
+                        let expr = parse_expression(parser, false)?;
+                        kvps.push((col, eq_token, expr));
+                        if parser.skip_token(Token::Comma).is_none() {
+                            break;
+                        }
+                    }
+                    if !parser.options.dialect.is_maria() {
+                        parser.issues.push(Issue::err(
+                            "Only support by mariadb",
+                            &on_duplicate_key_update_span.join_span(&kvps),
+                        ));
+                    }
+                    (Some((on_duplicate_key_update_span, kvps)), None)
+                }
+                Token::Ident(_, Keyword::CONFLICT) => {
+                    let on_conflict_span =
+                        on.join_span(&parser.consume_keyword(Keyword::CONFLICT)?);
+
+                    let target = match &parser.token {
+                        Token::LParen => {
+                            parser.consume_token(Token::LParen)?;
+                            let name = parser.consume_plain_identifier()?;
+                            parser.consume_token(Token::RParen)?;
+                            OnConflictTarget::Column { name: name }
+                        }
+                        Token::Ident(_, Keyword::ON) => {
+                            let on_constraint =
+                                parser.consume_keywords(&[Keyword::ON, Keyword::CONSTRAINT])?;
+                            let name = parser.consume_plain_identifier()?;
+                            OnConflictTarget::OnConstraint {
+                                on_constraint_span: on_constraint,
+                                name,
+                            }
+                        }
+                        _ => parser.expected_failure("( or ON")?,
+                    };
+
+                    let do_ = parser.consume_keyword(Keyword::DO)?;
+                    let action = match &parser.token {
+                        Token::Ident(_, Keyword::NOTHING) => OnConflictAction::DoNothing(
+                            do_.join_span(&parser.consume_keyword(Keyword::NOTHING)?),
+                        ),
+                        Token::Ident(_, Keyword::UPDATE) => {
+                            let do_update_set_span = do_.join_span(
+                                &parser.consume_keywords(&[Keyword::UPDATE, Keyword::SET])?,
+                            );
+                            let mut sets = Vec::new();
+                            loop {
+                                let name = parser.consume_plain_identifier()?;
+                                parser.consume_token(Token::Eq)?;
+                                let expr = parse_expression(parser, false)?;
+                                sets.push((name, expr));
+                                if parser.skip_token(Token::Comma).is_none() {
+                                    break;
+                                }
+                            }
+                            let where_ = if matches!(parser.token, Token::Ident(_, Keyword::WHERE))
+                            {
+                                let where_span = parser.consume_keyword(Keyword::WHERE)?;
+                                let where_expr =
+                                    alloc::boxed::Box::new(parse_expression(parser, false)?);
+                                Some((where_span, where_expr))
+                            } else {
+                                None
+                            };
+                            OnConflictAction::DoUpdateSet {
+                                do_update_set_span,
+                                sets,
+                                where_,
+                            }
+                        }
+                        _ => parser.expected_failure("'NOTHING' or 'UPDATE'")?,
+                    };
+
+                    let on_conflict = OnConflict {
+                        on_conflict_span,
+                        target: target,
+                        action: action,
+                    };
+
+                    if !parser.options.dialect.is_postgresql() {
+                        parser
+                            .issues
+                            .push(Issue::err("Only support by postgesql", &on_conflict));
+                    }
+
+                    (None, Some(on_conflict))
+                }
+                _ => parser.expected_failure("'DUPLICATE' OR 'CONFLICT'")?,
             }
-        }
-        Some((on_duplicate_key_update_span, kvps))
-    } else {
-        None
-    };
+        } else {
+            (None, None)
+        };
 
     let returning = if let Some(returning_span) = parser.skip_keyword(Keyword::RETURNING) {
         let mut returning_exprs = Vec::new();
@@ -311,6 +478,7 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
         select,
         set,
         on_duplicate_key_update,
+        on_conflict,
         returning,
     })
 }
