@@ -214,6 +214,7 @@ impl<'a> Spanned for CreateAlgorithm {
 pub enum CreateOption<'a> {
     OrReplace(Span),
     Temporary(Span),
+    Unique(Span),
     Algorithm(Span, CreateAlgorithm),
     Definer {
         definer_span: Span,
@@ -236,6 +237,7 @@ impl<'a> Spanned for CreateOption<'a> {
             } => definer_span.join_span(user).join_span(host),
             CreateOption::SqlSecurityDefiner(a, b) => a.join_span(b),
             CreateOption::SqlSecurityUser(a, b) => a.join_span(b),
+            CreateOption::Unique(v) => v.span(),
         }
     }
 }
@@ -1218,6 +1220,9 @@ pub(crate) fn parse_create<'a, 'b>(
                     ),
                     Token::Ident(_, Keyword::TEMPORARY) => {
                         CreateOption::Temporary(parser.consume_keyword(Keyword::TEMPORARY)?)
+                    }
+                    Token::Ident(_, Keyword::UNIQUE) => {
+                        CreateOption::Unique(parser.consume_keyword(Keyword::UNIQUE)?)
                     }
                     Token::Ident(_, Keyword::ALGORITHM) => {
                         let algorithm_span = parser.consume_keyword(Keyword::ALGORITHM)?;
