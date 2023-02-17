@@ -65,16 +65,18 @@ pub enum OnConflictTarget<'a> {
         on_constraint_span: Span,
         name: Identifier<'a>,
     },
+    None,
 }
 
-impl<'a> Spanned for OnConflictTarget<'a> {
-    fn span(&self) -> Span {
+impl<'a> OptSpanned for OnConflictTarget<'a> {
+    fn opt_span(&self) -> Option<Span> {
         match self {
-            OnConflictTarget::Column { name } => name.span(),
+            OnConflictTarget::Column { name } => Some(name.span()),
             OnConflictTarget::OnConstraint {
                 on_constraint_span: token,
                 name,
-            } => token.join_span(name),
+            } => Some(token.join_span(name)),
+            OnConflictTarget::None => None,
         }
     }
 }
@@ -395,7 +397,7 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
                                 name,
                             }
                         }
-                        _ => parser.expected_failure("( or ON")?,
+                        _ => OnConflictTarget::None,
                     };
 
                     let do_ = parser.consume_keyword(Keyword::DO)?;
