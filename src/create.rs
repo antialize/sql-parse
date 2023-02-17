@@ -363,11 +363,18 @@ pub(crate) fn parse_create_constraint_definition<'a, 'b>(
     parser.consume_keywords(&[Keyword::FOREIGN, Keyword::KEY])?;
     parser.consume_token(Token::LParen)?;
     parser.consume_plain_identifier()?;
+    while parser.skip_token(Token::Comma).is_some() {
+        parser.consume_plain_identifier()?;
+    }
     parser.consume_token(Token::RParen)?;
     parser.consume_keyword(Keyword::REFERENCES)?;
     parser.consume_plain_identifier()?;
     parser.consume_token(Token::LParen)?;
     parser.consume_plain_identifier()?;
+    while parser.skip_token(Token::Comma).is_some() {
+        parser.consume_plain_identifier()?;
+    }
+
     parser.consume_token(Token::RParen)?;
     if let Some(_) = parser.skip_keyword(Keyword::ON) {
         parser.consume_keyword(Keyword::DELETE)?;
