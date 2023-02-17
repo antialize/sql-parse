@@ -214,6 +214,7 @@ impl<'a> Spanned for CreateAlgorithm {
 pub enum CreateOption<'a> {
     OrReplace(Span),
     Temporary(Span),
+    Unique(Span),
     Algorithm(Span, CreateAlgorithm),
     Definer {
         definer_span: Span,
@@ -236,6 +237,7 @@ impl<'a> Spanned for CreateOption<'a> {
             } => definer_span.join_span(user).join_span(host),
             CreateOption::SqlSecurityDefiner(a, b) => a.join_span(b),
             CreateOption::SqlSecurityUser(a, b) => a.join_span(b),
+            CreateOption::Unique(v) => v.span(),
         }
     }
 }
@@ -361,11 +363,18 @@ pub(crate) fn parse_create_constraint_definition<'a, 'b>(
     parser.consume_keywords(&[Keyword::FOREIGN, Keyword::KEY])?;
     parser.consume_token(Token::LParen)?;
     parser.consume_plain_identifier()?;
+    while parser.skip_token(Token::Comma).is_some() {
+        parser.consume_plain_identifier()?;
+    }
     parser.consume_token(Token::RParen)?;
     parser.consume_keyword(Keyword::REFERENCES)?;
     parser.consume_plain_identifier()?;
     parser.consume_token(Token::LParen)?;
     parser.consume_plain_identifier()?;
+    while parser.skip_token(Token::Comma).is_some() {
+        parser.consume_plain_identifier()?;
+    }
+
     parser.consume_token(Token::RParen)?;
     if let Some(_) = parser.skip_keyword(Keyword::ON) {
         parser.consume_keyword(Keyword::DELETE)?;
@@ -989,7 +998,7 @@ pub struct CreateIndex<'a> {
     pub table_name: Identifier<'a>,
     pub index_options: Vec<CreateIndexOption>,
     pub l_paren_span: Span,
-    pub column_name: Identifier<'a>,
+    pub column_names: Vec<Identifier<'a>>,
     pub r_paren_span: Span,
 }
 
@@ -1003,7 +1012,7 @@ impl<'a> Spanned for CreateIndex<'a> {
             .join_span(&self.table_name)
             .join_span(&self.index_options)
             .join_span(&self.l_paren_span)
-            .join_span(&self.column_name)
+            .join_span(&self.column_names)
             .join_span(&self.r_paren_span)
     }
 }
@@ -1030,7 +1039,11 @@ fn parse_create_index<'a, 'b>(
         ));
     }
     let l_paren_span = parser.consume_token(Token::LParen)?;
-    let column_name = parser.consume_plain_identifier()?;
+    let mut column_names = Vec::new();
+    column_names.push(parser.consume_plain_identifier()?);
+    while parser.skip_token(Token::Comma).is_some() {
+        column_names.push(parser.consume_plain_identifier()?);
+    }
     let r_paren_span = parser.consume_token(Token::RParen)?;
     Ok(Statement::CreateIndex(CreateIndex {
         create_span,
@@ -1042,7 +1055,7 @@ fn parse_create_index<'a, 'b>(
         table_name,
         index_options,
         l_paren_span,
-        column_name,
+        column_names,
         r_paren_span,
     }))
 }
@@ -1218,6 +1231,9 @@ pub(crate) fn parse_create<'a, 'b>(
                     ),
                     Token::Ident(_, Keyword::TEMPORARY) => {
                         CreateOption::Temporary(parser.consume_keyword(Keyword::TEMPORARY)?)
+                    }
+                    Token::Ident(_, Keyword::UNIQUE) => {
+                        CreateOption::Unique(parser.consume_keyword(Keyword::UNIQUE)?)
                     }
                     Token::Ident(_, Keyword::ALGORITHM) => {
                         let algorithm_span = parser.consume_keyword(Keyword::ALGORITHM)?;
