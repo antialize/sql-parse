@@ -13,12 +13,13 @@ use alloc::{boxed::Box, vec::Vec};
 // limitations under the License.
 use crate::{
     data_type::parse_data_type,
+    expression::parse_expression,
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
     select::{parse_select, Select},
     statement::parse_statement,
-    DataType, Identifier, Issue, SString, Span, Spanned, Statement,
+    DataType, Expression, Identifier, Issue, SString, Span, Spanned, Statement,
 };
 
 /// Options on created table
@@ -1000,6 +1001,7 @@ pub struct CreateIndex<'a> {
     pub l_paren_span: Span,
     pub column_names: Vec<Identifier<'a>>,
     pub r_paren_span: Span,
+    pub where_: Option<(Span, Expression<'a>)>,
 }
 
 impl<'a> Spanned for CreateIndex<'a> {
@@ -1014,6 +1016,7 @@ impl<'a> Spanned for CreateIndex<'a> {
             .join_span(&self.l_paren_span)
             .join_span(&self.column_names)
             .join_span(&self.r_paren_span)
+            .join_span(&self.where_)
     }
 }
 
@@ -1045,6 +1048,19 @@ fn parse_create_index<'a, 'b>(
         column_names.push(parser.consume_plain_identifier()?);
     }
     let r_paren_span = parser.consume_token(Token::RParen)?;
+
+    let mut where_ = None;
+    if let Some(where_span) = parser.skip_keyword(Keyword::WHERE) {
+        let where_expr = parse_expression(parser, false)?;
+        if parser.options.dialect.is_maria() {
+            parser.issues.push(Issue::err(
+                "Partial indexes not supported",
+                &where_span.join_span(&where_expr),
+            ));
+        }
+        where_ = Some((where_span, where_expr));
+    }
+
     Ok(Statement::CreateIndex(CreateIndex {
         create_span,
         create_options,
@@ -1057,6 +1073,7 @@ fn parse_create_index<'a, 'b>(
         l_paren_span,
         column_names,
         r_paren_span,
+        where_,
     }))
 }
 

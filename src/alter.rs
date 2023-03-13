@@ -16,7 +16,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    DataType, Identifier, SString, Span, Spanned, Statement,
+    DataType, Identifier, Issue, SString, Span, Spanned, Statement,
 };
 
 /// Option on an index
@@ -136,6 +136,7 @@ impl<'a> Spanned for IndexCol<'a> {
 pub enum AlterSpecification<'a> {
     AddColumn {
         add_span: Span,
+        if_not_exists_span: Option<Span>,
         identifier: Identifier<'a>,
         data_type: DataType<'a>,
     },
@@ -204,9 +205,13 @@ impl<'a> Spanned for AlterSpecification<'a> {
         match &self {
             AlterSpecification::AddColumn {
                 add_span,
+                if_not_exists_span,
                 identifier,
                 data_type,
-            } => add_span.join_span(identifier).join_span(data_type),
+            } => add_span
+                .join_span(if_not_exists_span)
+                .join_span(identifier)
+                .join_span(data_type),
             AlterSpecification::AddIndex {
                 add_span,
                 index_type,
@@ -507,10 +512,25 @@ fn parse_add_alter_specification<'a, 'b>(
         }
         Token::Ident(_, Keyword::COLUMN) => {
             parser.consume_keyword(Keyword::COLUMN)?;
+            let mut if_not_exists_span = None;
+            if matches!(parser.token, Token::Ident(_, Keyword::IF)) {
+                if_not_exists_span =
+                    Some(parser.consume_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])?);
+            }
+
+            if let Some(s) = &if_not_exists_span {
+                if parser.options.dialect.is_maria() {
+                    parser
+                        .issues
+                        .push(Issue::err("IF NOT EXIST is not supported", s));
+                }
+            }
+
             let identifier = parser.consume_plain_identifier()?;
             let data_type = parse_data_type(parser, false)?;
             Ok(AlterSpecification::AddColumn {
                 add_span,
+                if_not_exists_span,
                 identifier,
                 data_type,
             })

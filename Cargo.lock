@@ -4,4 +4,4 @@ version = 3
 
 [[package]]
 name = "sql-parse"
-version = "0.10.2"
+version = "0.12.0"

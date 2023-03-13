@@ -103,11 +103,11 @@ pub enum SQLDialect {
 }
 
 impl SQLDialect {
-    fn is_postgresql(&self) -> bool {
+    pub fn is_postgresql(&self) -> bool {
         matches!(self, SQLDialect::PostgreSQL)
     }
 
-    fn is_maria(&self) -> bool {
+    pub fn is_maria(&self) -> bool {
         matches!(self, SQLDialect::MariaDB)
     }
 }
@@ -155,6 +155,10 @@ impl ParseOptions {
     /// Change whan SQL dialect to use
     pub fn dialect(self, dialect: SQLDialect) -> Self {
         Self { dialect, ..self }
+    }
+
+    pub fn get_dialect(&self) -> SQLDialect {
+        self.dialect.clone()
     }
 
     /// Change what kinds of arguments are supplied

@@ -1,9 +1,9 @@
 [package]
 name = "sql-parse"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2021"
 authors = ["Jakob Truelsen <antialize@gmail.com>"]
-keywords = [ "mysql", "sql", "lexer", "parser" ]
+keywords = [ "mysql", "postgresql", "sql", "lexer", "parser" ]
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/antialize/sql-parse/"
