@@ -9,10 +9,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use alloc::vec;
 use alloc::{boxed::Box, vec::Vec};
 
+use crate::Issue;
 use crate::{
     expression::{parse_expression, Expression},
     keywords::Keyword,
@@ -402,6 +402,58 @@ impl OptSpanned for OrderFlag {
     }
 }
 
+/// Lock strength for locking
+#[derive(Debug, Clone)]
+pub enum LockStrength {
+    Update(Span),
+    Share(Span),
+    NoKeyUpdate(Span),
+    KeyShare(Span),
+}
+impl Spanned for LockStrength {
+    fn span(&self) -> Span {
+        match &self {
+            LockStrength::Update(v) => v.span(),
+            LockStrength::Share(v) => v.span(),
+            LockStrength::NoKeyUpdate(v) => v.span(),
+            LockStrength::KeyShare(v) => v.span(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum LockWait {
+    NoWait(Span),
+    SkipLocket(Span),
+    Default,
+}
+impl OptSpanned for LockWait {
+    fn opt_span(&self) -> Option<Span> {
+        match &self {
+            LockWait::NoWait(v) => v.opt_span(),
+            LockWait::SkipLocket(v) => v.opt_span(),
+            LockWait::Default => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Locking<'a> {
+    /// Span of "FOR"
+    pub for_span: Span,
+    pub strength: LockStrength,
+    pub of: Option<(Span, Vec<Identifier<'a>>)>,
+    pub wait: LockWait,
+}
+impl<'a> Spanned for Locking<'a> {
+    fn span(&self) -> Span {
+        self.for_span
+            .join_span(&self.strength)
+            .join_span(&self.of)
+            .join_span(&self.wait)
+    }
+}
+
 /// Representation of select Statement
 ///
 /// ```
@@ -432,6 +484,19 @@ impl OptSpanned for OrderFlag {
 /// };
 ///
 /// println!("{:#?}", s.where_);
+///
+/// let sql = "SELECT * FROM t1, d2.t2 FOR SHARE OF t1, d2.t2 NOWAIT";
+/// let stmt = parse_statement(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: Select = match stmt {
+///     Some(Statement::Select(s)) => s,
+///     _ => panic!("We should get an select statement")
+/// };
+///
+/// assert!(s.locking.is_some());
+/// println!("{:#?}", s.locking);
 /// ```
 #[derive(Debug, Clone)]
 pub struct Select<'a> {
@@ -457,9 +522,10 @@ pub struct Select<'a> {
     pub order_by: Option<(Span, Vec<(Expression<'a>, OrderFlag)>)>,
     /// Span of "LIMIT", offset and count expressions if specified
     pub limit: Option<(Span, Option<Expression<'a>>, Expression<'a>)>,
-    /// Span of "FOR UPDATE"
-    pub for_update_span: Option<Span>,
+    /// Row locking clause
+    pub locking: Option<Locking<'a>>,
 }
+
 impl<'a> Spanned for Select<'a> {
     fn span(&self) -> Span {
         self.select_span
@@ -541,7 +607,7 @@ pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select
                 window_span: None,
                 order_by: None,
                 limit: None,
-                for_update_span: None,
+                locking: None,
             })
         }
     };
@@ -624,21 +690,68 @@ pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select
         None
     };
 
-    let for_update_span = if let Some(for_span) = parser.skip_keyword(Keyword::FOR) {
-        Some(
-            parser
-                .consume_keyword(Keyword::UPDATE)?
-                .join_span(&for_span),
-        )
+    let locking = if let Some(for_span) = parser.skip_keyword(Keyword::FOR) {
+        let strength = match &parser.token {
+            Token::Ident(_, Keyword::UPDATE) => {
+                LockStrength::Update(parser.consume_keyword(Keyword::UPDATE)?)
+            }
+            Token::Ident(_, Keyword::SHARE) => {
+                LockStrength::Share(parser.consume_keyword(Keyword::SHARE)?)
+            }
+            Token::Ident(_, Keyword::NO) => {
+                LockStrength::NoKeyUpdate(parser.consume_keywords(&[
+                    Keyword::NO,
+                    Keyword::KEY,
+                    Keyword::UPDATE,
+                ])?)
+            }
+            Token::Ident(_, Keyword::KEY) => {
+                LockStrength::KeyShare(parser.consume_keywords(&[Keyword::KEY, Keyword::SHARE])?)
+            }
+            _ => parser.expected_failure("UPDATE, SHARE, NO KEY UPDATE or KEY SHARE here")?,
+        };
+
+        if let LockStrength::NoKeyUpdate(s) | LockStrength::KeyShare(s) = &strength {
+            if !parser.options.dialect.is_postgresql() {
+                parser
+                    .issues
+                    .push(Issue::err("Only support by PostgreSQL", s));
+            }
+        }
+
+        let of = if let Some(of_span) = parser.skip_keyword(Keyword::OF) {
+            let mut table_references = Vec::new();
+            loop {
+                table_references.push(parser.consume_plain_identifier()?);
+                if parser.skip_token(Token::Comma).is_none() {
+                    break;
+                }
+            }
+            Some((of_span, table_references))
+        } else {
+            None
+        };
+
+        let wait = match &parser.token {
+            Token::Ident(_, Keyword::NOWAIT) => {
+                LockWait::NoWait(parser.consume_keyword(Keyword::NOWAIT)?)
+            }
+            Token::Ident(_, Keyword::SKIP) => {
+                LockWait::SkipLocket(parser.consume_keywords(&[Keyword::SKIP, Keyword::LOCKED])?)
+            }
+            _ => LockWait::Default,
+        };
+        Some(Locking {
+            for_span,
+            strength,
+            of,
+            wait,
+        })
     } else {
         None
     };
 
     // TODO [into_option]
-    // [FOR {UPDATE | SHARE}
-    //     [OF tbl_name [, tbl_name] ...]
-    //     [NOWAIT | SKIP LOCKED]
-    //   | LOCK IN SHARE MODE]
     // [into_option]
 
     // into_option: {
@@ -661,6 +774,6 @@ pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select
         window_span,
         order_by,
         limit,
-        for_update_span,
+        locking,
     })
 }
