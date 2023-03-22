@@ -386,7 +386,7 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
                             parser.consume_token(Token::LParen)?;
                             let name = parser.consume_plain_identifier()?;
                             parser.consume_token(Token::RParen)?;
-                            OnConflictTarget::Column { name: name }
+                            OnConflictTarget::Column { name }
                         }
                         Token::Ident(_, Keyword::ON) => {
                             let on_constraint =
@@ -439,8 +439,8 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
 
                     let on_conflict = OnConflict {
                         on_conflict_span,
-                        target: target,
-                        action: action,
+                        target,
+                        action,
                     };
 
                     if !parser.options.dialect.is_postgresql() {

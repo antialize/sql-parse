@@ -377,7 +377,7 @@ pub(crate) fn parse_create_constraint_definition<'a, 'b>(
     }
 
     parser.consume_token(Token::RParen)?;
-    if let Some(_) = parser.skip_keyword(Keyword::ON) {
+    if parser.skip_keyword(Keyword::ON).is_some() {
         parser.consume_keyword(Keyword::DELETE)?;
         match parser.token {
             Token::Ident(_, Keyword::CASCADE) => {
@@ -622,18 +622,16 @@ fn parse_create_function<'a, 'b>(
     parser.consume_token(Token::RParen)?;
     let returns_span = parser.consume_keyword(Keyword::RETURNS)?;
     let return_type = parse_data_type(parser, true)?;
-    if parser.options.dialect.is_postgresql() {
-        if let Some(_) = parser.skip_keyword(Keyword::AS) {
-            parser.consume_token(Token::DoubleDollar)?;
-            loop {
-                match &parser.token {
-                    Token::Eof | Token::DoubleDollar => {
-                        parser.consume_token(Token::DoubleDollar)?;
-                        break;
-                    }
-                    _ => {
-                        parser.consume();
-                    }
+    if parser.options.dialect.is_postgresql() && parser.skip_keyword(Keyword::AS).is_some() {
+        parser.consume_token(Token::DoubleDollar)?;
+        loop {
+            match &parser.token {
+                Token::Eof | Token::DoubleDollar => {
+                    parser.consume_token(Token::DoubleDollar)?;
+                    break;
+                }
+                _ => {
+                    parser.consume();
                 }
             }
         }

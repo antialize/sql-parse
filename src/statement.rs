@@ -67,14 +67,14 @@ fn parse_statement_list_inner<'a, 'b>(
 ) -> Result<(), ParseError> {
     loop {
         while parser.skip_token(Token::SemiColon).is_some() {}
-        let mut stdin = false;
-        match parse_statement(parser)? {
+        let stdin = match parse_statement(parser)? {
             Some(v) => {
-                stdin = v.reads_from_stdin();
+                let stdin = v.reads_from_stdin();
                 out.push(v);
+                stdin
             }
             None => break,
-        }
+        };
         if !matches!(parser.token, Token::SemiColon) {
             break;
         }

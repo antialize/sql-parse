@@ -249,14 +249,14 @@ impl<'a, 'b> Parser<'a, 'b> {
                 } else if kw == &Keyword::QUOTED_IDENTIFIER && self.options.dialect.is_postgresql()
                 {
                     self.issues.push(Issue::err(
-                        format!("quoted identifiers not supported by postgresql"),
+                        "quoted identifiers not supported by postgresql",
                         &self.span,
                     ));
                 }
                 Ok(Identifier::new(v, self.consume()))
             }
             Token::DoubleQuotedString(v) if self.options.dialect.is_postgresql() => {
-                Ok(Identifier::new(*v, self.consume()))
+                Ok(Identifier::new(v, self.consume()))
             }
             _ => self.expected_failure("identifier"),
         }
