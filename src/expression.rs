@@ -204,6 +204,13 @@ pub enum Function<'a> {
     Other(&'a str),
 }
 
+/// Function to execute
+#[derive(Debug, Clone)]
+pub enum Variable<'a> {
+    TimeZone,
+    Other(&'a str),
+}
+
 /// Binary operator to apply
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOperator {
@@ -387,7 +394,7 @@ pub enum Expression<'a> {
         /// Expression to count
         expr: Box<Expression<'a>>,
     },
-    /// Count expression
+    /// Group contat expression
     GroupConcat {
         /// Span of "GROUP_CONCAT"
         group_concat_span: Span,
@@ -395,6 +402,19 @@ pub enum Expression<'a> {
         distinct_span: Option<Span>,
         /// Expression to count
         expr: Box<Expression<'a>>,
+    },
+    /// Variable expression
+    Variable {
+        /// Span of "@@GLOBAL"
+        global: Option<Span>,
+        /// Span of "@@SESSION"
+        session: Option<Span>,
+        /// Span of '.'
+        dot: Option<Span>,
+        /// variable
+        variable: Variable<'a>,
+        // Span of variable
+        variable_span: Span,
     },
 }
 
@@ -453,6 +473,16 @@ impl<'a> Spanned for Expression<'a> {
                 distinct_span,
                 expr,
             } => group_concat_span.join_span(distinct_span).join_span(expr),
+            Expression::Variable {
+                global,
+                session,
+                dot,
+                variable_span,
+                variable: _,
+            } => variable_span
+                .join_span(global)
+                .join_span(session)
+                .join_span(dot),
         }
     }
 }
@@ -1202,6 +1232,28 @@ pub(crate) fn parse_expression<'a, 'b>(
                     whens,
                     else_,
                     end_span,
+                })
+            }
+            Token::AtAtGlobal | Token::AtAtSession => {
+                let global = parser.skip_token(Token::AtAtGlobal);
+                let session = if global.is_none() {
+                    Some(parser.consume_token(Token::AtAtGlobal)?)
+                } else {
+                    None
+                };
+                let dot = Some(parser.consume_token(Token::Period)?);
+                let variable = match &parser.token {
+                    Token::Ident(_, Keyword::TIME_ZONE) => Variable::TimeZone,
+                    Token::Ident(t, _) => Variable::Other(t),
+                    _ => parser.expected_failure("Identifier")?,
+                };
+                let variable_span = parser.consume();
+                r.shift_expr(Expression::Variable {
+                    global,
+                    session,
+                    dot,
+                    variable,
+                    variable_span,
                 })
             }
             _ => break,
