@@ -60,9 +60,11 @@ pub(crate) enum Token<'a> {
     DoubleQuotedString(&'a str),
     Spaceship,
     Tilde,
-    Eof,
     PercentS,
     DollarArg(usize),
+    AtAtGlobal,
+    AtAtSession,
+    Eof,
 }
 
 impl<'a> Token<'a> {
@@ -126,6 +128,8 @@ impl<'a> Token<'a> {
             Token::Spaceship => "'<=>'",
             Token::Tilde => "'~'",
             Token::PercentS => "'%s'",
+            Token::AtAtGlobal => "@@GLOBAL",
+            Token::AtAtSession => "@@SESSION.",
             Token::Eof => "EndOfFile",
         }
     }
@@ -253,7 +257,65 @@ impl<'a> Lexer<'a> {
                     _ => Token::Mod,
                 },
                 '#' => Token::Sharp,
-                '@' => Token::At,
+                '@' => match self.chars.peek() {
+                    Some((_, '@')) => {
+                        self.chars.next();
+                        match self.chars.peek() {
+                            Some((_, 's' | 'S')) => loop {
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 'e' | 'E'))) {
+                                    break Token::Invalid;
+                                }
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 's' | 'S'))) {
+                                    break Token::Invalid;
+                                }
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 's' | 'S'))) {
+                                    break Token::Invalid;
+                                }
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 'i' | 'I'))) {
+                                    break Token::Invalid;
+                                }
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 'o' | 'O'))) {
+                                    break Token::Invalid;
+                                }
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 'n' | 'N'))) {
+                                    break Token::Invalid;
+                                }
+                                break Token::AtAtSession;
+                            },
+                            Some((_, 'g' | 'G')) => loop {
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 'l' | 'L'))) {
+                                    break Token::Invalid;
+                                }
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 'o' | 'O'))) {
+                                    break Token::Invalid;
+                                }
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 'b' | 'B'))) {
+                                    break Token::Invalid;
+                                }
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 'a' | 'A'))) {
+                                    break Token::Invalid;
+                                }
+                                self.chars.next();
+                                if !matches!(self.chars.peek(), Some((_, 'l' | 'L'))) {
+                                    break Token::Invalid;
+                                }
+                                break Token::AtAtGlobal;
+                            },
+                            _ => Token::Invalid,
+                        }
+                    }
+                    _ => Token::At,
+                },
                 '~' => Token::Tilde,
                 ':' => match self.chars.peek() {
                     Some((_, ':')) => {

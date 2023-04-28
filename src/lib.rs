@@ -85,7 +85,7 @@ pub use drop::{
     DropView,
 };
 pub use expression::{
-    BinaryOperator, Expression, Function, IdentifierPart, Is, UnaryOperator, When,
+    BinaryOperator, Expression, Function, IdentifierPart, Is, UnaryOperator, When, Variable
 };
 pub use insert_replace::{
     InsertReplace, InsertReplaceFlag, InsertReplaceType, OnConflict, OnConflictAction,

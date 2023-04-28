@@ -485,7 +485,7 @@ impl<'a> Spanned for Locking<'a> {
 ///
 /// println!("{:#?}", s.where_);
 ///
-/// let sql = "SELECT * FROM t1, d2.t2 FOR SHARE OF t1, d2.t2 NOWAIT";
+/// let sql = "SELECT * FROM t1, d2.t2 FOR SHARE OF t1, t2 NOWAIT";
 /// let stmt = parse_statement(sql, &mut issues, &options);
 ///
 /// # assert!(issues.is_empty());
