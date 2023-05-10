@@ -1237,7 +1237,7 @@ pub(crate) fn parse_expression<'a, 'b>(
             Token::AtAtGlobal | Token::AtAtSession => {
                 let global = parser.skip_token(Token::AtAtGlobal);
                 let session = if global.is_none() {
-                    Some(parser.consume_token(Token::AtAtGlobal)?)
+                    Some(parser.consume_token(Token::AtAtSession)?)
                 } else {
                     None
                 };
