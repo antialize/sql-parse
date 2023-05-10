@@ -129,7 +129,7 @@ impl<'a> Token<'a> {
             Token::Tilde => "'~'",
             Token::PercentS => "'%s'",
             Token::AtAtGlobal => "@@GLOBAL",
-            Token::AtAtSession => "@@SESSION.",
+            Token::AtAtSession => "@@SESSION",
             Token::Eof => "EndOfFile",
         }
     }
@@ -286,6 +286,7 @@ impl<'a> Lexer<'a> {
                                 if !matches!(self.chars.peek(), Some((_, 'n' | 'N'))) {
                                     break Token::Invalid;
                                 }
+                                self.chars.next();
                                 break Token::AtAtSession;
                             },
                             Some((_, 'g' | 'G')) => loop {
@@ -309,6 +310,7 @@ impl<'a> Lexer<'a> {
                                 if !matches!(self.chars.peek(), Some((_, 'l' | 'L'))) {
                                     break Token::Invalid;
                                 }
+                                self.chars.next();
                                 break Token::AtAtGlobal;
                             },
                             _ => Token::Invalid,
