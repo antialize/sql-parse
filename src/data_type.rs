@@ -119,6 +119,8 @@ pub enum Type<'a> {
     Json,
     Bit(usize, Span),
     Bytea,
+    Inet4,
+    Inet6,
 }
 
 impl<'a> OptSpanned for Type<'a> {
@@ -157,6 +159,8 @@ impl<'a> OptSpanned for Type<'a> {
             Type::Json => None,
             Type::Bit(_, b) => b.opt_span(),
             Type::Bytea => None,
+            Type::Inet4 => None,
+            Type::Inet6 => None,
         }
     }
 }
@@ -245,6 +249,14 @@ pub(crate) fn parse_data_type<'a, 'b>(
         Token::Ident(_, Keyword::BIGINT) => (
             parser.consume_keyword(Keyword::BIGINT)?,
             Type::BigInt(parse_width(parser)?),
+        ),
+        Token::Ident(_, Keyword::INET4) => (
+            parser.consume_keyword(Keyword::INET4)?,
+            Type::Inet4,
+        ),
+        Token::Ident(_, Keyword::INET6) => (
+            parser.consume_keyword(Keyword::INET6)?,
+            Type::Inet6,
         ),
         Token::Ident(_, Keyword::TINYTEXT) => (
             parser.consume_keyword(Keyword::TINYTEXT)?,

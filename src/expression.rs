@@ -15,7 +15,7 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    select::parse_select,
+    select::{parse_select, OrderFlag},
     span::OptSpanned,
     statement::parse_compound_query,
     DataType, Identifier, SString, Span, Spanned, Statement,
@@ -201,6 +201,8 @@ pub enum Function<'a> {
     Week,
     Weekday,
     WeekOfYear,
+    Lead,
+    Lag,
     Other(&'a str),
 }
 
@@ -300,6 +302,19 @@ impl<'a> Spanned for When<'a> {
     }
 }
 
+/// When part of CASE
+#[derive(Debug, Clone)]
+pub struct WindowSpec<'a> {
+    /// Span of "ORDER BY" and list of order expression and directions, if specified
+    pub order_by: (Span, Vec<(Expression<'a>, OrderFlag)>),
+}
+
+impl<'a> Spanned for WindowSpec<'a> {
+    fn span(&self) -> Span {
+        self.order_by.span()
+    }
+}
+
 /// Representation of an expression
 #[derive(Debug, Clone)]
 pub enum Expression<'a> {
@@ -340,6 +355,14 @@ pub enum Expression<'a> {
     Float((f64, Span)),
     /// Function call expression,
     Function(Function<'a>, Vec<Expression<'a>>, Span),
+    /// A window function call expression
+    WindowFunction {
+        function: Function<'a>,
+        args: Vec<Expression<'a>>,
+        function_span: Span,
+        over_span: Span,
+        window_spec: WindowSpec<'a>,
+    },
     /// Identifier pointing to column
     Identifier(Vec<IdentifierPart<'a>>),
     /// Input argument to query, the first argument is the occurrence number of the argumnet
@@ -483,6 +506,16 @@ impl<'a> Spanned for Expression<'a> {
                 .join_span(global)
                 .join_span(session)
                 .join_span(dot),
+            Expression::WindowFunction {
+                function: _,
+                args,
+                function_span,
+                over_span,
+                window_spec,
+            } => function_span
+                .join_span(args)
+                .join_span(over_span)
+                .join_span(window_spec),
         }
     }
 }
@@ -557,6 +590,9 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::SUM) => Function::Sum,
         Token::Ident(_, Keyword::VALUE) => Function::Value,
         Token::Ident(_, Keyword::VALUES) => Function::Value,
+        Token::Ident(_, Keyword::LEAD) => Function::Lead,
+        Token::Ident(_, Keyword::LAG) => Function::Lag,
+
 
         //https://mariadb.com/kb/en/control-flow-functions/
         Token::Ident(_, Keyword::IFNULL) => Function::IfNull,
@@ -713,7 +749,36 @@ fn parse_function<'a, 'b>(
         }
     }
     parser.consume_token(Token::RParen)?;
-    Ok(Expression::Function(func, args, span))
+
+    if let Some(over_span) = parser.skip_keyword(Keyword::OVER) {
+        parser.consume_token(Token::LParen)?;
+        let order_span = parser.consume_keywords(&[Keyword::ORDER, Keyword::BY])?;
+        let mut order = Vec::new();
+        loop {
+            let e = parse_expression(parser, false)?;
+            let f = match &parser.token {
+                Token::Ident(_, Keyword::ASC) => OrderFlag::Asc(parser.consume()),
+                Token::Ident(_, Keyword::DESC) => OrderFlag::Desc(parser.consume()),
+                _ => OrderFlag::None,
+            };
+            order.push((e, f));
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        parser.consume_token(Token::RParen)?;
+        Ok(Expression::WindowFunction {
+            function: func,
+            args,
+            function_span: span,
+            over_span: over_span,
+            window_spec: WindowSpec {
+                order_by: (order_span, order),
+            },
+        })
+    } else {
+        Ok(Expression::Function(func, args, span))
+    }
 }
 
 //const INTERVAL_PRIORITY: usize = 10;
