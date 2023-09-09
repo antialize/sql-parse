@@ -593,7 +593,6 @@ fn parse_function<'a, 'b>(
         Token::Ident(_, Keyword::LEAD) => Function::Lead,
         Token::Ident(_, Keyword::LAG) => Function::Lag,
 
-
         //https://mariadb.com/kb/en/control-flow-functions/
         Token::Ident(_, Keyword::IFNULL) => Function::IfNull,
         Token::Ident(_, Keyword::NULLIF) => Function::NullIf,

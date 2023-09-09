@@ -250,14 +250,8 @@ pub(crate) fn parse_data_type<'a, 'b>(
             parser.consume_keyword(Keyword::BIGINT)?,
             Type::BigInt(parse_width(parser)?),
         ),
-        Token::Ident(_, Keyword::INET4) => (
-            parser.consume_keyword(Keyword::INET4)?,
-            Type::Inet4,
-        ),
-        Token::Ident(_, Keyword::INET6) => (
-            parser.consume_keyword(Keyword::INET6)?,
-            Type::Inet6,
-        ),
+        Token::Ident(_, Keyword::INET4) => (parser.consume_keyword(Keyword::INET4)?, Type::Inet4),
+        Token::Ident(_, Keyword::INET6) => (parser.consume_keyword(Keyword::INET6)?, Type::Inet6),
         Token::Ident(_, Keyword::TINYTEXT) => (
             parser.consume_keyword(Keyword::TINYTEXT)?,
             Type::TinyText(parse_width(parser)?),
@@ -309,11 +303,19 @@ pub(crate) fn parse_data_type<'a, 'b>(
         Token::Ident(_, Keyword::FLOAT8) => {
             (parser.consume_keyword(Keyword::FLOAT8)?, Type::Float8)
         }
+        Token::Ident(_, Keyword::REAL) => {
+            (parser.consume_keyword(Keyword::FLOAT)?, Type::Float(None)) // TODO
+        }
         Token::Ident(_, Keyword::FLOAT) => {
             (parser.consume_keyword(Keyword::FLOAT)?, Type::Float(None)) // TODO
         }
         Token::Ident(_, Keyword::DOUBLE) => {
-            (parser.consume_keyword(Keyword::DOUBLE)?, Type::Double(None)) // TODO
+            let i = if parser.options.dialect.is_postgresql() {
+                parser.consume_keywords(&[Keyword::DOUBLE, Keyword::PRECISION])?
+            } else {
+                parser.consume_keyword(Keyword::DOUBLE)?
+            };
+            (i, Type::Double(None)) // TODO
         }
         Token::Ident(_, Keyword::NUMERIC) => {
             let numeric = parser.consume_keyword(Keyword::NUMERIC)?;
