@@ -247,3 +247,16 @@ pub fn parse_statement<'a>(
         Err(_) => None,
     }
 }
+
+#[test]
+pub fn test_parse_alter_sql() {
+    let sql = "ALTER TABLE `test` ADD COLUMN `test1` VARCHAR (128) NULL DEFAULT NULL";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    parse_statement(sql, &mut issues, &options);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
