@@ -606,7 +606,7 @@ fn parse_alter_table<'a, 'b>(
     let table = parser.consume_plain_identifier()?;
     let d = parser.delimiter.clone();
     let mut alter_specifications = Vec::new();
-    parser.recovered(d.name(), &|t| t == &d, |parser| {
+    parser.recovered(d.name(), &|t| (t == &d || t == &Token::Eof), |parser| {
         loop {
             alter_specifications.push(match parser.token {
                 Token::Ident(_, Keyword::ADD) => parse_add_alter_specification(parser)?,
