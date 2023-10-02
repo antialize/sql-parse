@@ -142,7 +142,7 @@ impl<'a> Spanned for OnConflict<'a> {
 ///     _ => panic!("We should get an insert statement")
 /// };
 ///
-/// assert!(i.table[0].as_str() == "person");
+/// assert!(i.table.identifier.as_str() == "person");
 /// println!("{:#?}", i.values.unwrap());
 ///
 ///
@@ -157,7 +157,7 @@ impl<'a> Spanned for OnConflict<'a> {
 ///     _ => panic!("We should get an replace statement")
 /// };
 ///
-/// assert!(r.table[0].as_str() == "t2");
+/// assert!(r.table.identifier.as_str() == "t2");
 /// println!("{:#?}", r.values.unwrap());
 /// ```
 ///

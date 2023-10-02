@@ -559,7 +559,7 @@ fn parse_add_alter_specification<'a, 'b>(
 ///     _ => panic!("We should get an alter table statement")
 /// };
 ///
-/// assert!(alter.table.as_str() == "t1");
+/// assert!(alter.table.identifier.as_str() == "t1");
 /// println!("{:#?}", alter.alter_specifications)
 ///
 #[derive(Clone, Debug)]

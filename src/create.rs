@@ -267,7 +267,7 @@ impl<'a> Spanned for CreateOption<'a> {
 ///     _ => panic!("We should get an create table statement")
 /// };
 ///
-/// assert!(create.identifier.as_str() == "parts");
+/// assert!(create.identifier.identifier.as_str() == "parts");
 /// println!("{:#?}", create.create_definitions)
 /// ```
 

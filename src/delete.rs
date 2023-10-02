@@ -57,7 +57,7 @@ impl Spanned for DeleteFlag {
 ///     _ => panic!("We should get a delete statement")
 /// };
 ///
-/// assert!(delete.tables[0][0].as_str() == "t1");
+/// assert!(delete.tables[0].identifier.as_str() == "t1");
 /// println!("{:#?}", delete.where_);
 ///
 /// let sql = "DELETE `t1` FROM `t1` LEFT JOIN `t2` ON `t1`.`t2_id`=`t2`.`id` WHERE `t2`.`key`='my_key';";
