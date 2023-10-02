@@ -10,7 +10,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::{
@@ -18,8 +17,9 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
+    qualified_name::parse_qualified_name,
     select::parse_table_reference,
-    Identifier, Issue, Span, Spanned, TableReference,
+    Issue, QualifiedName, Span, Spanned, TableReference,
 };
 
 /// Flags for deletion
@@ -75,7 +75,7 @@ pub struct Delete<'a> {
     /// Span of "FROM"
     pub from_span: Span,
     /// Tables to do deletes on
-    pub tables: Vec<Vec<Identifier<'a>>>,
+    pub tables: Vec<QualifiedName<'a>>,
     /// Table to use in where clause in multi table delete
     pub using: Vec<TableReference<'a>>,
     /// Where expression and Span of "WHERE" if specified
@@ -116,14 +116,7 @@ pub(crate) fn parse_delete<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Delete
     let mut using = Vec::new();
     let from_span = if let Some(from_span) = parser.skip_keyword(Keyword::FROM) {
         loop {
-            let mut table = vec![parser.consume_plain_identifier()?];
-            loop {
-                if parser.skip_token(Token::Period).is_none() {
-                    break;
-                }
-                table.push(parser.consume_plain_identifier()?);
-            }
-            tables.push(table);
+            tables.push(parse_qualified_name(parser)?);
             if parser.skip_token(Token::Comma).is_none() {
                 break;
             }
@@ -131,14 +124,7 @@ pub(crate) fn parse_delete<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Delete
         from_span
     } else {
         loop {
-            let mut table = vec![parser.consume_plain_identifier()?];
-            loop {
-                if parser.skip_token(Token::Period).is_none() {
-                    break;
-                }
-                table.push(parser.consume_plain_identifier()?);
-            }
-            tables.push(table);
+            tables.push(parse_qualified_name(parser)?);
             if parser.skip_token(Token::Comma).is_none() {
                 break;
             }

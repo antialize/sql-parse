@@ -9,7 +9,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::{
@@ -17,8 +16,9 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
+    qualified_name::parse_qualified_name,
     select::{parse_select, parse_select_expr, Select, SelectExpr},
-    Identifier, Issue, OptSpanned, Span, Spanned,
+    Identifier, Issue, OptSpanned, QualifiedName, Span, Spanned,
 };
 
 /// Flags for insert
@@ -186,7 +186,7 @@ pub struct InsertReplace<'a> {
     /// Span of "INTO" if specified
     pub into_span: Option<Span>,
     /// Table to insert into
-    pub table: Vec<Identifier<'a>>,
+    pub table: QualifiedName<'a>,
     /// List of columns to set
     pub columns: Vec<Identifier<'a>>,
     /// Span of values "VALUES" and list of tuples to insert if specified
@@ -270,13 +270,7 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
     }
 
     let into_span = parser.skip_keyword(Keyword::INTO);
-    let mut table = vec![parser.consume_plain_identifier()?];
-    loop {
-        if parser.skip_token(Token::Period).is_none() {
-            break;
-        }
-        table.push(parser.consume_plain_identifier()?);
-    }
+    let table = parse_qualified_name(parser)?;
     // [PARTITION (partition_list)]
 
     let mut columns = Vec::new();

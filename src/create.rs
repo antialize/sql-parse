@@ -17,9 +17,10 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
+    qualified_name::parse_qualified_name,
     select::{parse_select, Select},
     statement::parse_statement,
-    DataType, Expression, Identifier, Issue, SString, Span, Spanned, Statement,
+    DataType, Expression, Identifier, Issue, QualifiedName, SString, Span, Spanned, Statement,
 };
 
 /// Options on created table
@@ -279,7 +280,7 @@ pub struct CreateTable<'a> {
     /// Span of "TABLE"
     pub table_span: Span,
     /// Name of the table
-    pub identifier: Identifier<'a>,
+    pub identifier: QualifiedName<'a>,
     /// Span of "IF NOT EXISTS" if specified
     pub if_not_exists: Option<Span>,
     /// Definitions of table members
@@ -1082,7 +1083,10 @@ fn parse_create_table<'a, 'b>(
 ) -> Result<Statement<'a>, ParseError> {
     let table_span = parser.consume_keyword(Keyword::TABLE)?;
 
-    let mut identifier = Identifier::new("", 0..0);
+    let mut identifier = QualifiedName {
+        identifier: Identifier::new("", 0..0),
+        prefix: Default::default(),
+    };
     let mut if_not_exists = None;
 
     parser.recovered("'('", &|t| t == &Token::LParen, |parser| {
@@ -1094,7 +1098,7 @@ fn parse_create_table<'a, 'b>(
                         .end,
             );
         }
-        identifier = parser.consume_plain_identifier()?;
+        identifier = parse_qualified_name(parser)?;
         Ok(())
     })?;
 

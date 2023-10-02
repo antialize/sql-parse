@@ -16,7 +16,8 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    DataType, Identifier, Issue, SString, Span, Spanned, Statement,
+    qualified_name::parse_qualified_name,
+    DataType, Identifier, Issue, QualifiedName, SString, Span, Spanned, Statement,
 };
 
 /// Option on an index
@@ -574,7 +575,7 @@ pub struct AlterTable<'a> {
     /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
     /// The identifier of the table to alter
-    pub table: Identifier<'a>,
+    pub table: QualifiedName<'a>,
     /// List of alterations to do
     pub alter_specifications: Vec<AlterSpecification<'a>>,
 }
@@ -603,7 +604,7 @@ fn parse_alter_table<'a, 'b>(
     } else {
         None
     };
-    let table = parser.consume_plain_identifier()?;
+    let table = parse_qualified_name(parser)?;
     let d = parser.delimiter.clone();
     let mut alter_specifications = Vec::new();
     parser.recovered(d.name(), &|t| (t == &d || t == &Token::Eof), |parser| {

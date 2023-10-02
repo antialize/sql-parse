@@ -9,10 +9,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use alloc::vec;
 use alloc::{boxed::Box, vec::Vec};
 
-use crate::Issue;
+use crate::qualified_name::parse_qualified_name;
 use crate::{
     expression::{parse_expression, Expression},
     keywords::Keyword,
@@ -22,6 +21,7 @@ use crate::{
     statement::parse_compound_query,
     Identifier, Span, Spanned, Statement,
 };
+use crate::{Issue, QualifiedName};
 
 /// Value in select
 #[derive(Debug, Clone)]
@@ -105,7 +105,7 @@ pub enum TableReference<'a> {
     /// Reference to a table or view
     Table {
         /// Name of table to to select from
-        identifier: Vec<Identifier<'a>>,
+        identifier: QualifiedName<'a>,
         /// Span of "AS" if specified
         as_span: Option<Span>,
         /// Alias for table if specified
@@ -191,13 +191,7 @@ pub(crate) fn parse_table_reference_inner<'a, 'b>(
             })
         }
         Token::Ident(_, _) => {
-            let mut identifier = vec![parser.consume_plain_identifier()?];
-            loop {
-                if parser.skip_token(Token::Period).is_none() {
-                    break;
-                }
-                identifier.push(parser.consume_plain_identifier()?);
-            }
+            let identifier = parse_qualified_name(parser)?;
 
             // index_hint_list:
             //     index_hint [, index_hint] ...
