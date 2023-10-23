@@ -520,8 +520,8 @@ impl<'a> Spanned for Expression<'a> {
     }
 }
 
-fn parse_function<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_function<'a>(
+    parser: &mut Parser<'a, '_>,
     t: Token<'a>,
     span: Span,
 ) -> Result<Expression<'a>, ParseError> {
@@ -770,7 +770,7 @@ fn parse_function<'a, 'b>(
             function: func,
             args,
             function_span: span,
-            over_span: over_span,
+            over_span,
             window_spec: WindowSpec {
                 order_by: (order_span, order),
             },
@@ -910,8 +910,8 @@ impl<'a> Reducer<'a> {
     }
 }
 
-pub(crate) fn parse_expression<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_expression<'a>(
+    parser: &mut Parser<'a, '_>,
     inner: bool,
 ) -> Result<Expression<'a>, ParseError> {
     let mut r = Reducer { stack: Vec::new() };
@@ -1337,8 +1337,8 @@ pub(crate) fn parse_expression<'a, 'b>(
     }
 }
 
-pub(crate) fn parse_expression_outer<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_expression_outer<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<Expression<'a>, ParseError> {
     if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
         Ok(Expression::Subquery(Box::new(Statement::Select(
@@ -1349,8 +1349,8 @@ pub(crate) fn parse_expression_outer<'a, 'b>(
     }
 }
 
-pub(crate) fn parse_expression_paren<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_expression_paren<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<Expression<'a>, ParseError> {
     if matches!(parser.token, Token::Ident(_, Keyword::SELECT)) {
         Ok(Expression::Subquery(Box::new(parse_compound_query(

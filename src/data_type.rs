@@ -200,9 +200,7 @@ fn parse_width_req(parser: &mut Parser<'_, '_>) -> Result<(usize, Span), ParseEr
     Ok(parse_width(parser)?.expect("width"))
 }
 
-fn parse_enum_set_values<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
-) -> Result<Vec<SString<'a>>, ParseError> {
+fn parse_enum_set_values<'a>(parser: &mut Parser<'a, '_>) -> Result<Vec<SString<'a>>, ParseError> {
     parser.consume_token(Token::LParen)?;
     let mut ans = Vec::new();
     parser.recovered(")", &|t| t == &Token::RParen, |parser| {
@@ -222,8 +220,8 @@ fn parse_enum_set_values<'a, 'b>(
     Ok(ans)
 }
 
-pub(crate) fn parse_data_type<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_data_type<'a>(
+    parser: &mut Parser<'a, '_>,
     no_as: bool,
 ) -> Result<DataType<'a>, ParseError> {
     let (identifier, type_) = match &parser.token {

@@ -90,7 +90,7 @@ impl<'a> Spanned for Update<'a> {
     }
 }
 
-pub(crate) fn parse_update<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Update<'a>, ParseError> {
+pub(crate) fn parse_update<'a>(parser: &mut Parser<'a, '_>) -> Result<Update<'a>, ParseError> {
     let update_span = parser.consume_keyword(Keyword::UPDATE)?;
     let mut flags = Vec::new();
 

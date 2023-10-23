@@ -201,7 +201,7 @@ pub enum CreateAlgorithm {
     Merge(Span),
     TempTable(Span),
 }
-impl<'a> Spanned for CreateAlgorithm {
+impl Spanned for CreateAlgorithm {
     fn span(&self) -> Span {
         match &self {
             CreateAlgorithm::Undefined(s) => s.span(),
@@ -357,8 +357,8 @@ impl<'a> Spanned for CreateView<'a> {
     }
 }
 
-pub(crate) fn parse_create_constraint_definition<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_create_constraint_definition<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<CreateDefinition<'a>, ParseError> {
     let span = parser.consume_keyword(Keyword::CONSTRAINT)?;
     let identifier = parser.consume_plain_identifier()?;
@@ -399,8 +399,8 @@ pub(crate) fn parse_create_constraint_definition<'a, 'b>(
     Ok(CreateDefinition::ConstraintDefinition { span, identifier })
 }
 
-pub(crate) fn parse_create_definition<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_create_definition<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<CreateDefinition<'a>, ParseError> {
     match &parser.token {
         Token::Ident(_, Keyword::CONSTRAINT) => parse_create_constraint_definition(parser),
@@ -412,8 +412,8 @@ pub(crate) fn parse_create_definition<'a, 'b>(
     }
 }
 
-fn parse_create_view<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_create_view<'a>(
+    parser: &mut Parser<'a, '_>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -567,8 +567,8 @@ impl<'a> Spanned for CreateFunction<'a> {
     }
 }
 
-fn parse_create_function<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_create_function<'a>(
+    parser: &mut Parser<'a, '_>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -833,8 +833,8 @@ impl<'a> Spanned for CreateTrigger<'a> {
     }
 }
 
-fn parse_create_trigger<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_create_trigger<'a>(
+    parser: &mut Parser<'a, '_>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -933,8 +933,8 @@ impl<'a> Spanned for CreateTypeEnum<'a> {
     }
 }
 
-fn parse_create_type<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_create_type<'a>(
+    parser: &mut Parser<'a, '_>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -1019,8 +1019,8 @@ impl<'a> Spanned for CreateIndex<'a> {
     }
 }
 
-fn parse_create_index<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_create_index<'a>(
+    parser: &mut Parser<'a, '_>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -1076,8 +1076,8 @@ fn parse_create_index<'a, 'b>(
     }))
 }
 
-fn parse_create_table<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_create_table<'a>(
+    parser: &mut Parser<'a, '_>,
     create_span: Span,
     create_options: Vec<CreateOption<'a>>,
 ) -> Result<Statement<'a>, ParseError> {
@@ -1217,9 +1217,7 @@ fn parse_create_table<'a, 'b>(
     }))
 }
 
-pub(crate) fn parse_create<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
-) -> Result<Statement<'a>, ParseError> {
+pub(crate) fn parse_create<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a>, ParseError> {
     let create_span = parser.span.clone();
     parser.consume_keyword(Keyword::CREATE)?;
 

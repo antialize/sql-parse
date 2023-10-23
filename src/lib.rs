@@ -90,8 +90,8 @@ pub use expression::{
     BinaryOperator, Expression, Function, IdentifierPart, Is, UnaryOperator, Variable, When,
 };
 pub use insert_replace::{
-    InsertReplace, InsertReplaceFlag, InsertReplaceType, OnConflict, OnConflictAction,
-    OnConflictTarget,
+    InsertReplace, InsertReplaceFlag, InsertReplaceOnDuplicateKeyUpdate, InsertReplaceSet,
+    InsertReplaceSetPair, InsertReplaceType, OnConflict, OnConflictAction, OnConflictTarget,
 };
 pub use select::{JoinSpecification, JoinType, Select, SelectExpr, SelectFlag, TableReference};
 pub use update::{Update, UpdateFlag};
@@ -253,6 +253,19 @@ pub fn parse_statement<'a>(
 #[test]
 pub fn test_parse_alter_sql() {
     let sql = "ALTER TABLE `test` ADD COLUMN `test1` VARCHAR (128) NULL DEFAULT NULL";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    parse_statement(sql, &mut issues, &options);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
+
+#[test]
+pub fn test_parse_delete_sql_with_schema() {
+    let sql = "DROP TABLE IF EXISTS `test_schema`.`test`";
     let options = ParseOptions::new()
         .dialect(SQLDialect::MariaDB)
         .arguments(SQLArguments::QuestionMark)

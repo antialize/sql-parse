@@ -38,8 +38,8 @@ impl<'a> Spanned for SelectExpr<'a> {
     }
 }
 
-pub(crate) fn parse_select_expr<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_select_expr<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<SelectExpr<'a>, ParseError> {
     let expr = parse_expression(parser, false)?;
     let as_ = if parser.skip_keyword(Keyword::AS).is_some() {
@@ -163,8 +163,8 @@ impl<'a> Spanned for TableReference<'a> {
     }
 }
 
-pub(crate) fn parse_table_reference_inner<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_table_reference_inner<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<TableReference<'a>, ParseError> {
     // TODO [LATERAL] table_subquery [AS] alias [(col_list)]
     // if parser.skip_token(Token::LParen).is_some() {
@@ -227,8 +227,8 @@ pub(crate) fn parse_table_reference_inner<'a, 'b>(
     }
 }
 
-pub(crate) fn parse_table_reference<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_table_reference<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<TableReference<'a>, ParseError> {
     let mut ans = parse_table_reference_inner(parser)?;
     loop {
@@ -362,7 +362,7 @@ pub enum SelectFlag {
     SqlCalcFoundRows(Span),
 }
 
-impl<'a> Spanned for SelectFlag {
+impl Spanned for SelectFlag {
     fn span(&self) -> Span {
         match &self {
             SelectFlag::All(v) => v.span(),
@@ -536,7 +536,7 @@ impl<'a> Spanned for Select<'a> {
     }
 }
 
-pub(crate) fn parse_select<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Select<'a>, ParseError> {
+pub(crate) fn parse_select<'a>(parser: &mut Parser<'a, '_>) -> Result<Select<'a>, ParseError> {
     let select_span = parser.consume_keyword(Keyword::SELECT)?;
     let mut flags = Vec::new();
     let mut select_exprs = Vec::new();

@@ -119,6 +119,45 @@ impl<'a> Spanned for OnConflict<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct InsertReplaceSetPair<'a> {
+    pub column: Identifier<'a>,
+    pub equal_span: Span,
+    pub value: Expression<'a>,
+}
+
+impl<'a> Spanned for InsertReplaceSetPair<'a> {
+    fn span(&self) -> Span {
+        self.column
+            .join_span(&self.equal_span)
+            .join_span(&self.value)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct InsertReplaceSet<'a> {
+    pub set_span: Span,
+    pub pairs: Vec<InsertReplaceSetPair<'a>>,
+}
+
+impl<'a> Spanned for InsertReplaceSet<'a> {
+    fn span(&self) -> Span {
+        self.set_span.join_span(&self.pairs)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct InsertReplaceOnDuplicateKeyUpdate<'a> {
+    pub on_duplicate_key_update_span: Span,
+    pub pairs: Vec<InsertReplaceSetPair<'a>>,
+}
+
+impl<'a> Spanned for InsertReplaceOnDuplicateKeyUpdate<'a> {
+    fn span(&self) -> Span {
+        self.on_duplicate_key_update_span.join_span(&self.pairs)
+    }
+}
+
 /// Representation of Insert or Replace Statement
 ///
 /// ```
@@ -176,7 +215,6 @@ impl<'a> Spanned for OnConflict<'a> {
 /// }
 /// # assert!(issues.is_empty());
 /// ```
-
 #[derive(Clone, Debug)]
 pub struct InsertReplace<'a> {
     /// Span of "INSERT" or "REPLACE"
@@ -194,9 +232,9 @@ pub struct InsertReplace<'a> {
     /// Select statement to insert if specified
     pub select: Option<Select<'a>>,
     /// Span of "SET" and list of key, value pairs to set if specified
-    pub set: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
+    pub set: Option<InsertReplaceSet<'a>>,
     /// Updates to execute on duplicate key (mysql)
-    pub on_duplicate_key_update: Option<(Span, Vec<(Identifier<'a>, Span, Expression<'a>)>)>,
+    pub on_duplicate_key_update: Option<InsertReplaceOnDuplicateKeyUpdate<'a>>,
     /// Action to take on duplicate keys (postgresql)
     pub on_conflict: Option<OnConflict<'a>>,
     /// Span of "RETURNING" and select expressions after "RETURNING", if "RETURNING" is present
@@ -218,8 +256,8 @@ impl<'a> Spanned for InsertReplace<'a> {
     }
 }
 
-pub(crate) fn parse_insert_replace<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_insert_replace<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<InsertReplace<'a>, ParseError> {
     let type_ = match &parser.token {
         Token::Ident(_, Keyword::INSERT) => InsertReplaceType::Insert(parser.consume()),
@@ -319,12 +357,16 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
         }
         Token::Ident(_, Keyword::SET) => {
             let set_span = parser.consume_keyword(Keyword::SET)?;
-            let mut kvps = Vec::new();
+            let mut pairs = Vec::new();
             loop {
-                let col = parser.consume_plain_identifier()?;
-                let eq_span = parser.consume_token(Token::Eq)?;
-                let val = parse_expression(parser, false)?;
-                kvps.push((col, eq_span, val));
+                let column = parser.consume_plain_identifier()?;
+                let equal_span = parser.consume_token(Token::Eq)?;
+                let value: Expression<'_> = parse_expression(parser, false)?;
+                pairs.push(InsertReplaceSetPair {
+                    column,
+                    equal_span,
+                    value,
+                });
                 if parser.skip_token(Token::Comma).is_none() {
                     break;
                 }
@@ -335,7 +377,7 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
                         .frag("Together with SET", &set_span),
                 );
             }
-            set = Some((set_span, kvps));
+            set = Some(InsertReplaceSet { set_span, pairs });
         }
         _ => {
             parser.expected_error("VALUE, VALUES, SELECT or SET");
@@ -353,12 +395,16 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
                             Keyword::KEY,
                             Keyword::UPDATE,
                         ])?);
-                    let mut kvps = Vec::new();
+                    let mut pairs = Vec::new();
                     loop {
-                        let col = parser.consume_plain_identifier()?;
-                        let eq_token = parser.consume_token(Token::Eq)?;
-                        let expr = parse_expression(parser, false)?;
-                        kvps.push((col, eq_token, expr));
+                        let column = parser.consume_plain_identifier()?;
+                        let equal_span = parser.consume_token(Token::Eq)?;
+                        let value = parse_expression(parser, false)?;
+                        pairs.push(InsertReplaceSetPair {
+                            column,
+                            equal_span,
+                            value,
+                        });
                         if parser.skip_token(Token::Comma).is_none() {
                             break;
                         }
@@ -366,10 +412,16 @@ pub(crate) fn parse_insert_replace<'a, 'b>(
                     if !parser.options.dialect.is_maria() {
                         parser.issues.push(Issue::err(
                             "Only support by mariadb",
-                            &on_duplicate_key_update_span.join_span(&kvps),
+                            &on_duplicate_key_update_span.join_span(&pairs),
                         ));
                     }
-                    (Some((on_duplicate_key_update_span, kvps)), None)
+                    (
+                        Some(InsertReplaceOnDuplicateKeyUpdate {
+                            on_duplicate_key_update_span,
+                            pairs,
+                        }),
+                        None,
+                    )
                 }
                 Token::Ident(_, Keyword::CONFLICT) => {
                     let on_conflict_span =

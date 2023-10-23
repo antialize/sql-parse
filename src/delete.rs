@@ -93,7 +93,7 @@ impl<'a> Spanned for Delete<'a> {
     }
 }
 
-pub(crate) fn parse_delete<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Delete<'a>, ParseError> {
+pub(crate) fn parse_delete<'a>(parser: &mut Parser<'a, '_>) -> Result<Delete<'a>, ParseError> {
     let delete_span = parser.consume_keyword(Keyword::DELETE)?;
     let mut flags = Vec::new();
 

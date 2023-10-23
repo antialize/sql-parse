@@ -16,7 +16,8 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    Identifier, Span, Spanned, Statement,
+    qualified_name::parse_qualified_name,
+    Identifier, QualifiedName, Span, Spanned, Statement,
 };
 
 /// Represent a drop table statement
@@ -36,7 +37,7 @@ use crate::{
 ///     _ => panic!("We should get a drop table statement")
 /// };
 ///
-/// assert!(delete.tables.get(0).unwrap().as_str() == "Employees");
+/// assert!(delete.tables.get(0).unwrap().identifier.as_str() == "Employees");
 /// ```
 #[derive(Debug, Clone)]
 pub struct DropTable<'a> {
@@ -49,7 +50,7 @@ pub struct DropTable<'a> {
     /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
     /// List of tables to drops
-    pub tables: Vec<Identifier<'a>>,
+    pub tables: Vec<QualifiedName<'a>>,
     /// Span of "CASCADE" if specified
     pub cascade: Option<Span>,
 }
@@ -81,7 +82,7 @@ impl<'a> Spanned for DropTable<'a> {
 ///     _ => panic!("We should get a drop table statement")
 /// };
 ///
-/// assert!(delete.views.get(0).unwrap().as_str() == "Employees");
+/// assert!(delete.views.get(0).unwrap().identifier.as_str() == "Employees");
 /// ```
 #[derive(Debug, Clone)]
 pub struct DropView<'a> {
@@ -94,7 +95,7 @@ pub struct DropView<'a> {
     /// Span of "IF EXISTS"
     pub if_exists: Option<Span>,
     /// List of views to drop
-    pub views: Vec<Identifier<'a>>,
+    pub views: Vec<QualifiedName<'a>>,
 }
 
 impl<'a> Spanned for DropView<'a> {
@@ -164,7 +165,7 @@ impl<'a> Spanned for DropDatabase<'a> {
 ///     _ => panic!("We should get a drop event statement")
 /// };
 ///
-/// assert!(s.event.as_str() == "myevent");
+/// assert!(s.event.identifier.as_str() == "myevent");
 /// ```
 #[derive(Debug, Clone)]
 pub struct DropEvent<'a> {
@@ -175,7 +176,7 @@ pub struct DropEvent<'a> {
     /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
     /// Event to drop
-    pub event: Identifier<'a>,
+    pub event: QualifiedName<'a>,
 }
 
 impl<'a> Spanned for DropEvent<'a> {
@@ -204,7 +205,7 @@ impl<'a> Spanned for DropEvent<'a> {
 ///     _ => panic!("We should get a drop function statement")
 /// };
 ///
-/// assert!(s.function.as_str() == "myfunc");
+/// assert!(s.function.identifier.as_str() == "myfunc");
 /// ```
 #[derive(Debug, Clone)]
 pub struct DropFunction<'a> {
@@ -215,7 +216,7 @@ pub struct DropFunction<'a> {
     /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
     /// Function to drop
-    pub function: Identifier<'a>,
+    pub function: QualifiedName<'a>,
 }
 
 impl<'a> Spanned for DropFunction<'a> {
@@ -244,7 +245,7 @@ impl<'a> Spanned for DropFunction<'a> {
 ///     _ => panic!("We should get a drop procedure statement")
 /// };
 ///
-/// assert!(s.procedure.as_str() == "myproc");
+/// assert!(s.procedure.identifier.as_str() == "myproc");
 /// ```
 #[derive(Debug, Clone)]
 pub struct DropProcedure<'a> {
@@ -255,7 +256,7 @@ pub struct DropProcedure<'a> {
     /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
     /// Procedure to drop
-    pub procedure: Identifier<'a>,
+    pub procedure: QualifiedName<'a>,
 }
 
 impl<'a> Spanned for DropProcedure<'a> {
@@ -324,7 +325,7 @@ impl<'a> Spanned for DropServer<'a> {
 ///     _ => panic!("We should get a drop trigger statement")
 /// };
 ///
-/// assert!(s.trigger.as_str() == "mytrigger");
+/// assert!(s.identifier.identifier.as_str() == "mytrigger");
 /// ```
 #[derive(Debug, Clone)]
 pub struct DropTrigger<'a> {
@@ -334,10 +335,8 @@ pub struct DropTrigger<'a> {
     pub trigger_span: Span,
     /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
-    /// Schema identifier if specified
-    pub schema: Option<Identifier<'a>>,
     /// Trigger to drop
-    pub trigger: Identifier<'a>,
+    pub identifier: QualifiedName<'a>,
 }
 
 impl<'a> Spanned for DropTrigger<'a> {
@@ -345,12 +344,11 @@ impl<'a> Spanned for DropTrigger<'a> {
         self.drop_span
             .join_span(&self.trigger_span)
             .join_span(&self.if_exists)
-            .join_span(&self.schema)
-            .join_span(&self.trigger)
+            .join_span(&self.identifier)
     }
 }
 
-pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statement<'a>, ParseError> {
+pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a>, ParseError> {
     let drop_span = parser.consume_keyword(Keyword::DROP)?;
     let temporary = parser.skip_keyword(Keyword::TEMPORARY);
     match &parser.token {
@@ -363,7 +361,7 @@ pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statemen
             };
             let mut tables = Vec::new();
             loop {
-                tables.push(parser.consume_plain_identifier()?);
+                tables.push(parse_qualified_name(parser)?);
                 if parser.skip_token(Token::Comma).is_none() {
                     break;
                 }
@@ -407,7 +405,7 @@ pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statemen
             } else {
                 None
             };
-            let event = parser.consume_plain_identifier()?;
+            let event = parse_qualified_name(parser)?;
             Ok(Statement::DropEvent(DropEvent {
                 drop_span,
                 event_span,
@@ -423,7 +421,7 @@ pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statemen
             } else {
                 None
             };
-            let function = parser.consume_plain_identifier()?;
+            let function = parse_qualified_name(parser)?;
             Ok(Statement::DropFunction(DropFunction {
                 drop_span,
                 function_span,
@@ -443,7 +441,7 @@ pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statemen
             } else {
                 None
             };
-            let procedure = parser.consume_plain_identifier()?;
+            let procedure = parse_qualified_name(parser)?;
             Ok(Statement::DropProcedure(DropProcedure {
                 drop_span,
                 procedure_span,
@@ -478,18 +476,12 @@ pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statemen
             } else {
                 None
             };
-            let n1 = parser.consume_plain_identifier()?;
-            let (schema, trigger) = if parser.skip_token(Token::Period).is_some() {
-                (Some(n1), parser.consume_plain_identifier()?)
-            } else {
-                (None, n1)
-            };
+            let identifier = parse_qualified_name(parser)?;
             Ok(Statement::DropTrigger(DropTrigger {
                 drop_span,
                 trigger_span,
                 if_exists,
-                schema,
-                trigger,
+                identifier,
             }))
         }
         Token::Ident(_, Keyword::VIEW) => {
@@ -501,7 +493,7 @@ pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statemen
             };
             let mut views = Vec::new();
             loop {
-                views.push(parser.consume_plain_identifier()?);
+                views.push(parse_qualified_name(parser)?);
                 if parser.skip_token(Token::Comma).is_none() {
                     break;
                 }
