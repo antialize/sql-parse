@@ -218,8 +218,8 @@ impl<'a> Spanned for InsertReplace<'a> {
     }
 }
 
-pub(crate) fn parse_insert_replace<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_insert_replace<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<InsertReplace<'a>, ParseError> {
     let type_ = match &parser.token {
         Token::Ident(_, Keyword::INSERT) => InsertReplaceType::Insert(parser.consume()),

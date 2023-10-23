@@ -263,8 +263,8 @@ impl<'a> Spanned for AlterSpecification<'a> {
     }
 }
 
-fn parse_index_type<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_index_type<'a>(
+    parser: &mut Parser<'a, '_>,
     out: &mut Vec<IndexOption<'a>>,
 ) -> Result<(), ParseError> {
     parser.consume_keyword(Keyword::USING)?;
@@ -283,8 +283,8 @@ fn parse_index_type<'a, 'b>(
     Ok(())
 }
 
-fn parse_index_options<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_index_options<'a>(
+    parser: &mut Parser<'a, '_>,
     out: &mut Vec<IndexOption<'a>>,
 ) -> Result<(), ParseError> {
     loop {
@@ -300,7 +300,7 @@ fn parse_index_options<'a, 'b>(
     Ok(())
 }
 
-fn parse_index_cols<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<IndexCol<'a>>, ParseError> {
+fn parse_index_cols<'a>(parser: &mut Parser<'a, '_>) -> Result<Vec<IndexCol<'a>>, ParseError> {
     parser.consume_token(Token::LParen)?;
     let mut ans = Vec::new();
     parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
@@ -329,7 +329,7 @@ fn parse_index_cols<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<IndexCol<
     Ok(ans)
 }
 
-fn parse_cols<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<Identifier<'a>>, ParseError> {
+fn parse_cols<'a>(parser: &mut Parser<'a, '_>) -> Result<Vec<Identifier<'a>>, ParseError> {
     parser.consume_token(Token::LParen)?;
     let mut ans = Vec::new();
     parser.recovered("')'", &|t| t == &Token::RParen, |parser| {
@@ -345,8 +345,8 @@ fn parse_cols<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Vec<Identifier<'a>>
     Ok(ans)
 }
 
-fn parse_add_alter_specification<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_add_alter_specification<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<AlterSpecification<'a>, ParseError> {
     let add_span = parser.consume_keyword(Keyword::ADD)?;
     let constraint = if let Some(span) = parser.skip_keyword(Keyword::CONSTRAINT) {
@@ -592,8 +592,8 @@ impl<'a> Spanned for AlterTable<'a> {
     }
 }
 
-fn parse_alter_table<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+fn parse_alter_table<'a>(
+    parser: &mut Parser<'a, '_>,
     alter_span: Span,
     online: Option<Span>,
     ignore: Option<Span>,
@@ -655,9 +655,7 @@ fn parse_alter_table<'a, 'b>(
     })
 }
 
-pub(crate) fn parse_alter<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
-) -> Result<Statement<'a>, ParseError> {
+pub(crate) fn parse_alter<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a>, ParseError> {
     let alter_span = parser.consume_keyword(Keyword::ALTER)?;
 
     let online = parser.skip_keyword(Keyword::ONLINE);

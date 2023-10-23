@@ -263,7 +263,6 @@ pub fn test_parse_alter_sql() {
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }
 
-
 #[test]
 pub fn test_parse_delete_sql_with_schema() {
     let sql = "DROP TABLE IF EXISTS `test_schema`.`test`";

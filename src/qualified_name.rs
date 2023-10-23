@@ -18,8 +18,8 @@ impl<'a> Spanned for QualifiedName<'a> {
     }
 }
 
-pub(crate) fn parse_qualified_name<'a, 'b>(
-    parser: &mut Parser<'a, 'b>,
+pub(crate) fn parse_qualified_name<'a>(
+    parser: &mut Parser<'a, '_>,
 ) -> Result<QualifiedName<'a>, ParseError> {
     let mut identifier = parser.consume_plain_identifier()?;
     let mut prefix = Vec::new();

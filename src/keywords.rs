@@ -16,7 +16,9 @@ macro_rules! keywords {
     )*] => {
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
         #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
+        #[derive(Default)]
         pub enum Keyword {
+            #[default]
             NOT_A_KEYWORD,
             QUOTED_IDENTIFIER,
             $($ident),*
@@ -71,12 +73,6 @@ macro_rules! expr_ident {
             }
         }
     };
-}
-
-impl Default for Keyword {
-    fn default() -> Self {
-        Keyword::NOT_A_KEYWORD
-    }
 }
 
 keywords![

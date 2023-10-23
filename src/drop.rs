@@ -348,7 +348,7 @@ impl<'a> Spanned for DropTrigger<'a> {
     }
 }
 
-pub(crate) fn parse_drop<'a, 'b>(parser: &mut Parser<'a, 'b>) -> Result<Statement<'a>, ParseError> {
+pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a>, ParseError> {
     let drop_span = parser.consume_keyword(Keyword::DROP)?;
     let temporary = parser.skip_keyword(Keyword::TEMPORARY);
     match &parser.token {

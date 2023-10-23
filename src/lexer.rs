@@ -86,8 +86,8 @@ impl<'a> Token<'a> {
             Token::Float(_) => "Float",
             Token::Gt => "'>'",
             Token::GtEq => "'>='",
-            Token::Ident(_, kw) if kw == &Keyword::NOT_A_KEYWORD => "Identifier",
-            Token::Ident(_, kw) if kw == &Keyword::QUOTED_IDENTIFIER => "QuotedIdentifier",
+            Token::Ident(_, Keyword::NOT_A_KEYWORD) => "Identifier",
+            Token::Ident(_, Keyword::QUOTED_IDENTIFIER) => "QuotedIdentifier",
             Token::Ident(_, kw) => kw.name(),
             Token::Integer(_) => "Integer",
             Token::Invalid => "Invalid",
@@ -203,7 +203,7 @@ impl<'a> Lexer<'a> {
             if matches!(self.chars.peek(), Some((_, '\n'))) {
                 // Data ends with NL '\' '.' NL.
                 self.chars.next().unwrap();
-            } else if !matches!(self.chars.peek(), None) {
+            } else if self.chars.peek().is_some() {
                 continue;
             } else {
                 // Data ends with NL '\' '.' without an extra NL,
@@ -260,6 +260,7 @@ impl<'a> Lexer<'a> {
                 '@' => match self.chars.peek() {
                     Some((_, '@')) => {
                         self.chars.next();
+                        #[allow(clippy::never_loop)]
                         match self.chars.peek() {
                             Some((_, 's' | 'S')) => loop {
                                 self.chars.next();
