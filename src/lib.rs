@@ -275,3 +275,29 @@ pub fn test_parse_delete_sql_with_schema() {
     parse_statement(sql, &mut issues, &options);
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }
+
+#[test]
+pub fn test_parse_schema() {
+    let sql = include_str!("../schema.sql");
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::PostgreSQL)
+        //.arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    parse_statement(sql, &mut issues, &options);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
+
+#[test]
+pub fn test_parse_qs() {
+    let sql = include_str!("../qs.sql");
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::PostgreSQL)
+        //.arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    parse_statement(sql, &mut issues, &options);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
