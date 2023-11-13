@@ -388,6 +388,26 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
+    pub(crate) fn dialect_unsupported(&mut self, elm: &impl Spanned) {
+        self.issues.push(Issue::err(format!("Not supported by {:?}", self.options.dialect), &elm.span()))
+    }
+
+    pub(crate) fn require_mariadb(&mut self, elm: &Option<impl Spanned>) {
+        if !self.options.dialect.is_maria() {
+            if let Some(elm) = elm {
+                self.dialect_unsupported(elm);
+            }
+        }
+    }
+
+    pub(crate) fn require_postgresql(&mut self, elm: &Option<impl Spanned>) {
+        if !self.options.dialect.is_postgresql() {
+            if let Some(elm) = elm {
+                self.dialect_unsupported(elm);
+            }
+        }
+    }
+
     pub(crate) fn error<T>(&mut self, message: impl Into<String>) -> Result<T, ParseError> {
         self.issues.push(Issue::err(message, &self.span));
         Err(ParseError::Unrecovered)

@@ -574,6 +574,8 @@ pub struct AlterTable<'a> {
     pub table_span: Span,
     /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
+    /// Span of "ONLY" if specified
+    pub only: Option<Span>,
     /// The identifier of the table to alter
     pub table: QualifiedName<'a>,
     /// List of alterations to do
@@ -587,6 +589,7 @@ impl<'a> Spanned for AlterTable<'a> {
             .join_span(&self.ignore)
             .join_span(&self.table_span)
             .join_span(&self.if_exists)
+            .join_span(&self.only)
             .join_span(&self.table)
             .join_span(&self.alter_specifications)
     }
@@ -604,6 +607,7 @@ fn parse_alter_table<'a>(
     } else {
         None
     };
+    let only = parser.skip_keyword(Keyword::ONLY);
     let table = parse_qualified_name(parser)?;
     let d = parser.delimiter.clone();
     let mut alter_specifications = Vec::new();
@@ -644,12 +648,14 @@ fn parse_alter_table<'a>(
         }
         Ok(())
     })?;
+    parser.require_postgresql(&only);
     Ok(AlterTable {
         alter_span,
         online,
         ignore,
         table_span,
         if_exists,
+        only,
         table,
         alter_specifications,
     })
