@@ -250,54 +250,93 @@ pub fn parse_statement<'a>(
     }
 }
 
-#[test]
-pub fn test_parse_alter_sql() {
-    let sql = "ALTER TABLE `test` ADD COLUMN `test1` VARCHAR (128) NULL DEFAULT NULL";
-    let options = ParseOptions::new()
-        .dialect(SQLDialect::MariaDB)
-        .arguments(SQLArguments::QuestionMark)
-        .warn_unquoted_identifiers(false);
+#[cfg(test)]
+mod tests {
+    use alloc::vec;
+    use alloc::vec::Vec;
+    use codespan_reporting::{
+        diagnostic::{Diagnostic, Label},
+        files::SimpleFiles,
+        term::{
+            self,
+            termcolor::{ColorChoice, StandardStream},
+        },
+    };
+    use crate::{ParseOptions, SQLDialect, SQLArguments, parse_statement, parse_statements, Issue, Level};
 
-    let mut issues = Vec::new();
-    parse_statement(sql, &mut issues, &options);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
-}
+    fn check_issues(name: &str, src: &str, issues: &[Issue]) {
+        let mut files = SimpleFiles::new();
+        let file_id = files.add(name, &src);
+        let writer = StandardStream::stderr(ColorChoice::Always);
+        let config = codespan_reporting::term::Config::default();
+        let mut errors = 0;
+        for issue in issues {
+            let mut labels = vec![Label::primary(file_id, issue.span.clone())];
+            for (message, span) in &issue.fragments {
+                labels.push(Label::secondary(file_id, span.clone()).with_message(message));
+            }
+            let d = match issue.level {
+                Level::Error => {
+                    errors += 1;
+                    Diagnostic::error()
+                }
+                Level::Warning => Diagnostic::warning(),
+            };
+            let d = d.with_message(&issue.message).with_labels(labels);
+            term::emit(&mut writer.lock(), &config, &files, &d).unwrap();
+        }
+        assert_eq!(errors, 0);
+    }
 
-#[test]
-pub fn test_parse_delete_sql_with_schema() {
-    let sql = "DROP TABLE IF EXISTS `test_schema`.`test`";
-    let options = ParseOptions::new()
-        .dialect(SQLDialect::MariaDB)
-        .arguments(SQLArguments::QuestionMark)
-        .warn_unquoted_identifiers(false);
+    #[test]
+    pub fn test_parse_alter_sql() {
+        let sql = "ALTER TABLE `test` ADD COLUMN `test1` VARCHAR (128) NULL DEFAULT NULL";
+        let options = ParseOptions::new()
+            .dialect(SQLDialect::MariaDB)
+            .arguments(SQLArguments::QuestionMark)
+            .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
-    parse_statement(sql, &mut issues, &options);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
-}
+        let mut issues = Vec::new();
+        parse_statement(sql, &mut issues, &options);
+        check_issues("test_parse_alter_sql", sql, &issues);
+    }
 
-#[test]
-pub fn test_parse_schema() {
-    let sql = include_str!("../schema.sql");
-    let options = ParseOptions::new()
-        .dialect(SQLDialect::PostgreSQL)
-        //.arguments(SQLArguments::QuestionMark)
-        .warn_unquoted_identifiers(false);
+    #[test]
+    pub fn test_parse_delete_sql_with_schema() {
+        let sql = "DROP TABLE IF EXISTS `test_schema`.`test`";
+        let options = ParseOptions::new()
+            .dialect(SQLDialect::MariaDB)
+            .arguments(SQLArguments::QuestionMark)
+            .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
-    parse_statement(sql, &mut issues, &options);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
-}
+        let mut issues = Vec::new();
+        parse_statement(sql, &mut issues, &options);
+        check_issues("test_parse_delete_sql_with_schema", sql, &issues);
+    }
 
-#[test]
-pub fn test_parse_qs() {
-    let sql = include_str!("../qs.sql");
-    let options = ParseOptions::new()
-        .dialect(SQLDialect::PostgreSQL)
-        //.arguments(SQLArguments::QuestionMark)
-        .warn_unquoted_identifiers(false);
+    #[test]
+    pub fn test_parse_schema() {
+        let sql = include_str!("../schema.sql");
+        let options = ParseOptions::new()
+            .dialect(SQLDialect::PostgreSQL)
+            //.arguments(SQLArguments::QuestionMark)
+            .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
-    parse_statement(sql, &mut issues, &options);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+        let mut issues = Vec::new();
+        parse_statements(sql, &mut issues, &options);
+        check_issues("schema.sql", sql, &issues);
+    }
+
+    #[test]
+    pub fn test_parse_qs() {
+        let sql = include_str!("../qs.sql");
+        let options = ParseOptions::new()
+            .dialect(SQLDialect::PostgreSQL)
+            .arguments(SQLArguments::Dollar)
+            .warn_unquoted_identifiers(false);
+
+        let mut issues = Vec::new();
+        parse_statements(sql, &mut issues, &options);
+        check_issues("ql.sql", sql, &issues);
+    }
 }

@@ -9,3 +9,7 @@ readme = "README.md"
 repository = "https://github.com/antialize/sql-parse/"
 homepage = "https://github.com/antialize/sql-parse/"
 description = "Parser for sql"
+
+
+[dev-dependencies]
+codespan-reporting = "0.11"
