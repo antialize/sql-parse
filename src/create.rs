@@ -995,7 +995,7 @@ pub struct CreateIndex<'a> {
     pub index_name: Identifier<'a>,
     pub if_not_exists: Option<Span>,
     pub on_span: Span,
-    pub table_name: Identifier<'a>,
+    pub table_name: QualifiedName<'a>,
     pub index_options: Vec<CreateIndexOption>,
     pub l_paren_span: Span,
     pub column_names: Vec<Identifier<'a>>,
@@ -1032,7 +1032,7 @@ fn parse_create_index<'a>(
     };
     let index_name = parser.consume_plain_identifier()?;
     let on_span = parser.consume_keyword(Keyword::ON)?;
-    let table_name = parser.consume_plain_identifier()?;
+    let table_name = parse_qualified_name(parser)?;
     let mut index_options = Vec::new();
     if let Some(using_span) = parser.skip_keyword(Keyword::USING) {
         let gist_span = parser.consume_keyword(Keyword::GIST)?;
