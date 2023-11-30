@@ -275,3 +275,15 @@ pub fn test_parse_delete_sql_with_schema() {
     parse_statement(sql, &mut issues, &options);
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }
+#[test]
+pub fn parse_create_index_sql_with_schema() {
+    let sql = "CREATE INDEX `idx_test` ON  test_schema.test(`col_test`)";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    parse_statement(sql, &mut issues, &options);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
