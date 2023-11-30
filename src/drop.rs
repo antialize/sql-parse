@@ -431,7 +431,23 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a
         }
         Token::Ident(_, Keyword::INDEX) => {
             // DROP INDEX [IF EXISTS] index_name ON tbl_name
-            parser.todo(file!(), line!())
+            let index_span = parser.consume_keyword(Keyword::INDEX)?;
+            let if_exists = if let Some(span) = parser.skip_keyword(Keyword::IF) {
+                Some(parser.consume_keyword(Keyword::EXISTS)?.join_span(&span))
+            } else {
+                None
+            };
+            let index_name = parser.consume_plain_identifier()?;
+            let on_span = parser.consume_keyword(Keyword::ON)?;
+            let table_name = parse_qualified_name(parser)?;
+            Ok(Statement::DropIndex(DropIndex {
+                drop_span,
+                index_span,
+                if_exists,
+                index_name,
+                on_span,
+                table_name,
+            }))
         }
         Token::Ident(_, Keyword::PROCEDURE) => {
             // TODO complain about temporary
@@ -512,5 +528,28 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a
             parser.todo(file!(), line!())
         }
         _ => parser.expected_failure("droppable"),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DropIndex<'a> {
+    /// Span of "DROP"
+    pub drop_span: Span,
+    /// Span of "INDEX"
+    pub index_span: Span,
+    /// Span of "IF EXISTS" if specified
+    pub if_exists: Option<Span>,
+    pub index_name: Identifier<'a>,
+    pub on_span: Span,
+    pub table_name: QualifiedName<'a>,
+}
+
+impl<'a> Spanned for DropIndex<'a> {
+    fn span(&self) -> Span {
+        self.drop_span
+            .join_span(&self.index_span)
+            .join_span(&self.index_name)
+            .join_span(&self.on_span)
+            .join_span(&self.table_name)
     }
 }
