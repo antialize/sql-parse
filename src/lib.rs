@@ -301,3 +301,32 @@ pub fn parse_drop_index_sql_with_schema() {
     // assert!(result.is_none(), "result: {:#?}", &result);
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }
+
+#[test]
+pub fn parse_create_view_sql_with_schema() {
+    let sql =
+        "CREATE OR REPLACE VIEW `test_schema`.`view_test` AS SELECT * FROM `test_schema`.`test`";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    let result = parse_statement(sql, &mut issues, &options);
+    // assert!(result.is_none(), "result: {:#?}", &result);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
+
+#[test]
+pub fn parse_drop_view_sql_with_schema() {
+    let sql = "DROP VIEW `test_schema`.`view_test`";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    let result = parse_statement(sql, &mut issues, &options);
+    // assert!(result.is_none(), "result: {:#?}", &result);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}

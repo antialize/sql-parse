@@ -338,7 +338,7 @@ pub struct CreateView<'a> {
     /// Span of "IF NOT EXISTS" if specified
     pub if_not_exists: Option<Span>,
     /// Name of the created view
-    pub name: Identifier<'a>,
+    pub name: QualifiedName<'a>,
     /// Span of "AS"
     pub as_span: Span,
     /// The select statement following "AS"
@@ -429,7 +429,7 @@ fn parse_create_view<'a>(
         None
     };
 
-    let name = parser.consume_plain_identifier()?;
+    let name = parse_qualified_name(parser)?;
     // TODO (column_list)
 
     let as_span = parser.consume_keyword(Keyword::AS)?;
