@@ -323,7 +323,7 @@ impl<'a> Spanned for CreateTable<'a> {
 ///     _ => panic!("We should get an create view statement")
 /// };
 ///
-/// assert!(create.name.as_str() == "v1");
+/// assert!(create.name.identifier.as_str() == "v1");
 /// println!("{:#?}", create.select)
 /// ```
 
