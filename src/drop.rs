@@ -548,6 +548,7 @@ impl<'a> Spanned for DropIndex<'a> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.index_span)
+            .join_span(&self.if_exists)
             .join_span(&self.index_name)
             .join_span(&self.on_span)
             .join_span(&self.table_name)
