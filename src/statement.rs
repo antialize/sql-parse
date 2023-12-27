@@ -10,7 +10,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{
+    boxed::Box,
+    format,
+    string::ToString,
+    vec::{self, Vec},
+};
 
 use crate::{
     alter::{parse_alter, AlterTable},
@@ -28,8 +33,10 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
+    qualified_name::parse_qualified_name,
     select::{parse_select, OrderFlag, Select},
     span::OptSpanned,
+    truncate::TruncateTable,
     update::{parse_update, Update},
     Identifier, Span, Spanned,
 };
@@ -271,6 +278,7 @@ pub enum Statement<'a> {
     Stdin(&'a str, Span),
     CreateTypeEnum(CreateTypeEnum<'a>),
     Do(Vec<Statement<'a>>),
+    TruncateTable(TruncateTable<'a>),
 }
 
 impl<'a> Spanned for Statement<'a> {
@@ -309,6 +317,7 @@ impl<'a> Spanned for Statement<'a> {
             Statement::StartTransaction(s) => s.clone(),
             Statement::CreateTypeEnum(v) => v.span(),
             Statement::Do(v) => v.opt_span().expect("Span of block"),
+            Statement::TruncateTable(v) => v.span(),
         }
     }
 }
@@ -350,8 +359,45 @@ pub(crate) fn parse_statement<'a>(
         Token::Ident(_, Keyword::CASE) => Some(Statement::Case(parse_case_statement(parser)?)),
         Token::Ident(_, Keyword::COPY) => Some(Statement::Copy(parse_copy_statement(parser)?)),
         Token::Ident(_, Keyword::DO) => Some(parse_do(parser)?),
+        Token::Ident(_, Keyword::TRUNCATE) => Some(parse_truncate_table(parser)?),
         _ => None,
     })
+}
+
+pub(crate) fn parse_truncate_table<'a>(
+    parser: &mut Parser<'a, '_>,
+) -> Result<Statement<'a>, ParseError> {
+    let truncate_span = parser.consume_keyword(Keyword::TRUNCATE)?;
+    let mut table_span = None;
+    let table_name = loop {
+        match parser.token {
+            Token::Ident(_, k) => {
+                if k == Keyword::TABLE {
+                    if None == table_span {
+                        table_span = Some(parser.span.clone());
+                    } else {
+                        parser.expected_failure(parser.token.name())?;
+                    };
+                } else if k == Keyword::QUOTED_IDENTIFIER || k == Keyword::NOT_A_KEYWORD {
+                    break parse_qualified_name(parser)?;
+                } else {
+                    parser.expected_failure(parser.token.name())?;
+                }
+            }
+            _ => parser.expected_failure(parser.token.name())?,
+        };
+        parser.next();
+    };
+    parser.next();
+    match parser.token {
+        Token::Eof => {}
+        _ => parser.expected_failure("illegal Eof!")?,
+    }
+    Ok(Statement::TruncateTable(TruncateTable {
+        truncate_span,
+        table_span,
+        table_name,
+    }))
 }
 
 pub(crate) fn parse_do<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a>, ParseError> {
