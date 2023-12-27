@@ -9,7 +9,7 @@ use crate::{QualifiedName, Span, Spanned};
 /// let sql = "TRUNCATE TABLE `t1`;";
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
+/// # assert!(issues.is_empty(), "Issues: {:#?}", issues);
 /// #
 /// let truncate_table: TruncateTable = match stmts.pop() {
 ///     Some(Statement::TruncateTable(c)) => c,

@@ -388,11 +388,6 @@ pub(crate) fn parse_truncate_table<'a>(
         };
         parser.next();
     };
-    parser.next();
-    match parser.token {
-        Token::Eof => {}
-        _ => parser.expected_failure("illegal Eof!")?,
-    }
     Ok(Statement::TruncateTable(TruncateTable {
         truncate_span,
         table_span,
