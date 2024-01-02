@@ -63,6 +63,7 @@ mod select;
 mod span;
 mod sstring;
 mod statement;
+mod truncate;
 mod update;
 
 pub use data_type::{DataType, DataTypeProperty, Type};
@@ -94,6 +95,7 @@ pub use insert_replace::{
     InsertReplaceSetPair, InsertReplaceType, OnConflict, OnConflictAction, OnConflictTarget,
 };
 pub use select::{JoinSpecification, JoinType, Select, SelectExpr, SelectFlag, TableReference};
+pub use truncate::TruncateTable;
 pub use update::{Update, UpdateFlag};
 
 /// What sql diarect to parse as
@@ -320,6 +322,20 @@ pub fn parse_create_view_sql_with_schema() {
 #[test]
 pub fn parse_drop_view_sql_with_schema() {
     let sql = "DROP VIEW `test_schema`.`view_test`";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    let result = parse_statement(sql, &mut issues, &options);
+    // assert!(result.is_none(), "result: {:#?}", &result);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
+
+#[test]
+pub fn parse_truncate_table_sql_with_schema() {
+    let sql = "TRUNCATE TABLE `test_schema`.`view_test`";
     let options = ParseOptions::new()
         .dialect(SQLDialect::MariaDB)
         .arguments(SQLArguments::QuestionMark)
