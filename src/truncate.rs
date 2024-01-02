@@ -1,4 +1,9 @@
-use crate::{QualifiedName, Span, Spanned};
+use crate::{
+    keywords::Keyword,
+    parser::{ParseError, Parser},
+    qualified_name::parse_qualified_name,
+    QualifiedName, Span, Spanned, Statement,
+};
 
 /// Represent a truncate table statement
 /// ```
@@ -35,4 +40,17 @@ impl<'a> Spanned for TruncateTable<'a> {
             .join_span(&self.table_span)
             .join_span(&self.table_name)
     }
+}
+
+pub(crate) fn parse_truncate_table<'a>(
+    parser: &mut Parser<'a, '_>,
+) -> Result<Statement<'a>, ParseError> {
+    let truncate_span = parser.consume_keyword(Keyword::TRUNCATE)?;
+    let table_span = parser.skip_keyword(Keyword::TABLE);
+    let table_name = parse_qualified_name(parser)?;
+    Ok(Statement::TruncateTable(TruncateTable {
+        truncate_span,
+        table_span,
+        table_name,
+    }))
 }

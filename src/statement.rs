@@ -36,7 +36,7 @@ use crate::{
     qualified_name::parse_qualified_name,
     select::{parse_select, OrderFlag, Select},
     span::OptSpanned,
-    truncate::TruncateTable,
+    truncate::{parse_truncate_table, TruncateTable},
     update::{parse_update, Update},
     Identifier, Span, Spanned,
 };
@@ -362,37 +362,6 @@ pub(crate) fn parse_statement<'a>(
         Token::Ident(_, Keyword::TRUNCATE) => Some(parse_truncate_table(parser)?),
         _ => None,
     })
-}
-
-pub(crate) fn parse_truncate_table<'a>(
-    parser: &mut Parser<'a, '_>,
-) -> Result<Statement<'a>, ParseError> {
-    let truncate_span = parser.consume_keyword(Keyword::TRUNCATE)?;
-    let mut table_span = None;
-    let table_name = loop {
-        match parser.token {
-            Token::Ident(_, k) => {
-                if k == Keyword::TABLE {
-                    if None == table_span {
-                        table_span = Some(parser.span.clone());
-                    } else {
-                        parser.expected_failure(parser.token.name())?;
-                    };
-                } else if k == Keyword::QUOTED_IDENTIFIER || k == Keyword::NOT_A_KEYWORD {
-                    break parse_qualified_name(parser)?;
-                } else {
-                    parser.expected_failure(parser.token.name())?;
-                }
-            }
-            _ => parser.expected_failure(parser.token.name())?,
-        };
-        parser.next();
-    };
-    Ok(Statement::TruncateTable(TruncateTable {
-        truncate_span,
-        table_span,
-        table_name,
-    }))
 }
 
 pub(crate) fn parse_do<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a>, ParseError> {
