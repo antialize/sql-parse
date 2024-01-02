@@ -359,7 +359,9 @@ pub(crate) fn parse_statement<'a>(
         Token::Ident(_, Keyword::CASE) => Some(Statement::Case(parse_case_statement(parser)?)),
         Token::Ident(_, Keyword::COPY) => Some(Statement::Copy(parse_copy_statement(parser)?)),
         Token::Ident(_, Keyword::DO) => Some(parse_do(parser)?),
-        Token::Ident(_, Keyword::TRUNCATE) => Some(parse_truncate_table(parser)?),
+        Token::Ident(_, Keyword::TRUNCATE) => {
+            Some(Statement::TruncateTable(parse_truncate_table(parser)?))
+        }
         _ => None,
     })
 }
