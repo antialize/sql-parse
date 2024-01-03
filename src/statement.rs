@@ -10,12 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloc::{
-    boxed::Box,
-    format,
-    string::ToString,
-    vec::{self, Vec},
-};
+use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
     alter::{parse_alter, AlterTable},
@@ -33,7 +28,6 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    qualified_name::parse_qualified_name,
     rename::parse_rename_table,
     select::{parse_select, OrderFlag, Select},
     span::OptSpanned,
