@@ -59,6 +59,7 @@ mod keywords;
 mod lexer;
 mod parser;
 mod qualified_name;
+mod rename;
 mod select;
 mod span;
 mod sstring;
@@ -94,6 +95,7 @@ pub use insert_replace::{
     InsertReplace, InsertReplaceFlag, InsertReplaceOnDuplicateKeyUpdate, InsertReplaceSet,
     InsertReplaceSetPair, InsertReplaceType, OnConflict, OnConflictAction, OnConflictTarget,
 };
+pub use rename::{RenameTable, TableToTable};
 pub use select::{JoinSpecification, JoinType, Select, SelectExpr, SelectFlag, TableReference};
 pub use truncate::TruncateTable;
 pub use update::{Update, UpdateFlag};
@@ -299,7 +301,7 @@ pub fn parse_drop_index_sql_with_schema() {
         .warn_unquoted_identifiers(false);
 
     let mut issues = Vec::new();
-    let result = parse_statement(sql, &mut issues, &options);
+    let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }
@@ -314,7 +316,7 @@ pub fn parse_create_view_sql_with_schema() {
         .warn_unquoted_identifiers(false);
 
     let mut issues = Vec::new();
-    let result = parse_statement(sql, &mut issues, &options);
+    let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }
@@ -328,21 +330,35 @@ pub fn parse_drop_view_sql_with_schema() {
         .warn_unquoted_identifiers(false);
 
     let mut issues = Vec::new();
-    let result = parse_statement(sql, &mut issues, &options);
+    let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }
 
 #[test]
 pub fn parse_truncate_table_sql_with_schema() {
-    let sql = "TRUNCATE TABLE `test_schema`.`view_test`";
+    let sql = "TRUNCATE TABLE `test_schema`.`table_test`";
     let options = ParseOptions::new()
         .dialect(SQLDialect::MariaDB)
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
     let mut issues = Vec::new();
-    let result = parse_statement(sql, &mut issues, &options);
+    let _result = parse_statement(sql, &mut issues, &options);
+    // assert!(result.is_none(), "result: {:#?}", &result);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
+
+#[test]
+pub fn parse_rename_table_sql_with_schema() {
+    let sql = "RENAME TABLE `test_schema`.`table_test` To `test_schema`.`table_new_test`";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }
