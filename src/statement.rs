@@ -33,7 +33,8 @@ use crate::{
     span::OptSpanned,
     truncate::{parse_truncate_table, TruncateTable},
     update::{parse_update, Update},
-    Identifier, RenameTable, Span, Spanned,
+    with_query::parse_with_query,
+    Identifier, RenameTable, Span, Spanned, WithQuery,
 };
 
 #[derive(Clone, Debug)]
@@ -275,6 +276,7 @@ pub enum Statement<'a> {
     Do(Vec<Statement<'a>>),
     TruncateTable(TruncateTable<'a>),
     RenameTable(RenameTable<'a>),
+    WithQuery(WithQuery<'a>),
 }
 
 impl<'a> Spanned for Statement<'a> {
@@ -315,6 +317,7 @@ impl<'a> Spanned for Statement<'a> {
             Statement::Do(v) => v.opt_span().expect("Span of block"),
             Statement::TruncateTable(v) => v.span(),
             Statement::RenameTable(v) => v.span(),
+            Statement::WithQuery(v) => v.span(),
         }
     }
 }
@@ -362,6 +365,7 @@ pub(crate) fn parse_statement<'a>(
         Token::Ident(_, Keyword::RENAME) => {
             Some(Statement::RenameTable(parse_rename_table(parser)?))
         }
+        Token::Ident(_, Keyword::WITH) => Some(Statement::WithQuery(parse_with_query(parser)?)),
         _ => None,
     })
 }
