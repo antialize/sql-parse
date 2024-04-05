@@ -18,8 +18,8 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     qualified_name::parse_qualified_name,
-    select::parse_table_reference,
-    Issue, QualifiedName, Span, Spanned, TableReference,
+    select::{parse_select_expr, parse_table_reference},
+    Issue, QualifiedName, SelectExpr, Span, Spanned, TableReference,
 };
 
 /// Flags for deletion
@@ -80,6 +80,8 @@ pub struct Delete<'a> {
     pub using: Vec<TableReference<'a>>,
     /// Where expression and Span of "WHERE" if specified
     pub where_: Option<(Expression<'a>, Span)>,
+    /// Span of "RETURNING" and select expressions after "RETURNING", if "RETURNING" is present
+    pub returning: Option<(Span, Vec<SelectExpr<'a>>)>,
 }
 
 impl<'a> Spanned for Delete<'a> {
@@ -90,6 +92,7 @@ impl<'a> Spanned for Delete<'a> {
             .join_span(&self.tables)
             .join_span(&self.using)
             .join_span(&self.where_)
+            .join_span(&self.returning)
     }
 }
 
@@ -164,8 +167,19 @@ pub(crate) fn parse_delete<'a>(parser: &mut Parser<'a, '_>) -> Result<Delete<'a>
     };
     //TODO [ORDER BY ...]
     //TODO LIMIT row_count]
-    //TODO [RETURNING select_expr
-    //TODO  [, select_expr ...]]
+
+    let returning = if let Some(returning_span) = parser.skip_keyword(Keyword::RETURNING) {
+        let mut returning_exprs = Vec::new();
+        loop {
+            returning_exprs.push(parse_select_expr(parser)?);
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        Some((returning_span, returning_exprs))
+    } else {
+        None
+    };
 
     Ok(Delete {
         flags,
@@ -174,5 +188,6 @@ pub(crate) fn parse_delete<'a>(parser: &mut Parser<'a, '_>) -> Result<Delete<'a>
         using,
         from_span,
         where_,
+        returning,
     })
 }
