@@ -66,6 +66,7 @@ mod sstring;
 mod statement;
 mod truncate;
 mod update;
+mod with_query;
 
 pub use data_type::{DataType, DataTypeProperty, Type};
 pub use identifier::Identifier;
@@ -99,6 +100,7 @@ pub use rename::{RenameTable, TableToTable};
 pub use select::{JoinSpecification, JoinType, Select, SelectExpr, SelectFlag, TableReference};
 pub use truncate::TruncateTable;
 pub use update::{Update, UpdateFlag};
+pub use with_query::{WithBlock, WithQuery};
 
 /// What sql diarect to parse as
 #[derive(Clone, Debug)]
@@ -354,6 +356,23 @@ pub fn parse_rename_table_sql_with_schema() {
     let sql = "RENAME TABLE `test_schema`.`table_test` To `test_schema`.`table_new_test`";
     let options = ParseOptions::new()
         .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    let _result = parse_statement(sql, &mut issues, &options);
+    // assert!(result.is_none(), "result: {:#?}", &result);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
+
+#[test]
+pub fn parse_with_statement() {
+    let sql = "
+        WITH monkeys AS (DELETE FROM thing RETURNING id),
+        baz AS (SELECT id FROM cats WHERE comp IN (monkeys))
+        DELETE FROM dogs WHERE cat IN (cats)";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::PostgreSQL)
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
