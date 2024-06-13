@@ -147,12 +147,12 @@ impl Spanned for IndexHintFor {
 
 #[derive(Debug, Clone)]
 pub struct IndexHint<'a> {
-    use_: IndexHintUse,
-    type_: IndexHintType,
-    for_: Option<(Span, IndexHintFor)>,
-    lparen: Span,
-    index_list: Vec<Identifier<'a>>,
-    rparen: Span,
+    pub use_: IndexHintUse,
+    pub type_: IndexHintType,
+    pub for_: Option<(Span, IndexHintFor)>,
+    pub lparen: Span,
+    pub index_list: Vec<Identifier<'a>>,
+    pub rparen: Span,
 }
 
 impl<'a> Spanned for IndexHint<'a> {
