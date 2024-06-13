@@ -86,8 +86,8 @@ pub use create::{
 };
 pub use delete::{Delete, DeleteFlag};
 pub use drop::{
-    DropDatabase, DropEvent, DropFunction, DropProcedure, DropServer, DropTable, DropTrigger,
-    DropView,
+    DropDatabase, DropEvent, DropFunction, DropIndex, DropProcedure, DropServer, DropTable,
+    DropTrigger, DropView,
 };
 pub use expression::{
     BinaryOperator, Expression, Function, IdentifierPart, Is, UnaryOperator, Variable, When,
@@ -97,7 +97,10 @@ pub use insert_replace::{
     InsertReplaceSetPair, InsertReplaceType, OnConflict, OnConflictAction, OnConflictTarget,
 };
 pub use rename::{RenameTable, TableToTable};
-pub use select::{JoinSpecification, JoinType, Select, SelectExpr, SelectFlag, TableReference};
+pub use select::{
+    IndexHint, IndexHintFor, IndexHintType, IndexHintUse, JoinSpecification, JoinType, Select,
+    SelectExpr, SelectFlag, TableReference,
+};
 pub use truncate::TruncateTable;
 pub use update::{Update, UpdateFlag};
 pub use with_query::{WithBlock, WithQuery};
@@ -379,5 +382,18 @@ pub fn parse_with_statement() {
     let mut issues = Vec::new();
     let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}
+
+#[test]
+pub fn parse_use_index() {
+    let sql = "SELECT `a` FROM `b` FORCE INDEX FOR GROUP BY (`b`, `c`)";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    let _result = parse_statement(sql, &mut issues, &options);
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }

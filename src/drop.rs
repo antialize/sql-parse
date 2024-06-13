@@ -17,7 +17,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     qualified_name::parse_qualified_name,
-    Identifier, QualifiedName, Span, Spanned, Statement,
+    Identifier, Issue, QualifiedName, Span, Spanned, Statement,
 };
 
 /// Represent a drop table statement
@@ -438,16 +438,33 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a
                 None
             };
             let index_name = parser.consume_plain_identifier()?;
-            let on_span = parser.consume_keyword(Keyword::ON)?;
-            let table_name = parse_qualified_name(parser)?;
-            Ok(Statement::DropIndex(DropIndex {
+            let on = if let Some(span) = parser.skip_keyword(Keyword::ON) {
+                let table_name = parse_qualified_name(parser)?;
+                Some((span, table_name))
+            } else {
+                None
+            };
+
+            let v = DropIndex {
                 drop_span,
                 index_span,
                 if_exists,
                 index_name,
-                on_span,
-                table_name,
-            }))
+                on,
+            };
+
+            if v.on.is_none() && parser.options.dialect.is_maria() {
+                parser
+                    .issues
+                    .push(Issue::err("On required for index drops in MariaDb", &v));
+            }
+            if v.on.is_some() && parser.options.dialect.is_postgresql() {
+                parser.issues.push(Issue::err(
+                    "On not supported for index drops in PostgreSQL",
+                    &v,
+                ));
+            }
+            Ok(Statement::DropIndex(v))
         }
         Token::Ident(_, Keyword::PROCEDURE) => {
             // TODO complain about temporary
@@ -531,6 +548,47 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a
     }
 }
 
+/// Represent a drop index statement.
+///
+/// MariaDB example
+/// ```
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropIndex, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP INDEX IF EXISTS `myindex` ON `bar`;";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty());
+/// #
+/// let s: DropIndex = match stmts.pop() {
+///     Some(Statement::DropIndex(s)) => s,
+///     _ => panic!("We should get a drop trigger statement")
+/// };
+///
+/// assert!(s.index_name.as_str() == "myindex");
+/// ```
+///
+/// PostgreSQL example
+/// ```
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropIndex, Statement};
+/// # let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL);
+/// # let mut issues = Vec::new();
+/// #
+/// let sql = "DROP INDEX IF EXISTS \"myindex\";";
+///
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_empty(), "{:?}", issues);
+/// #
+/// let s: DropIndex = match stmts.pop() {
+///     Some(Statement::DropIndex(s)) => s,
+///     _ => panic!("We should get a drop trigger statement")
+/// };
+///
+/// assert!(s.index_name.as_str() == "myindex");
+/// ```
 #[derive(Debug, Clone)]
 pub struct DropIndex<'a> {
     /// Span of "DROP"
@@ -540,8 +598,7 @@ pub struct DropIndex<'a> {
     /// Span of "IF EXISTS" if specified
     pub if_exists: Option<Span>,
     pub index_name: Identifier<'a>,
-    pub on_span: Span,
-    pub table_name: QualifiedName<'a>,
+    pub on: Option<(Span, QualifiedName<'a>)>,
 }
 
 impl<'a> Spanned for DropIndex<'a> {
@@ -550,7 +607,6 @@ impl<'a> Spanned for DropIndex<'a> {
             .join_span(&self.index_span)
             .join_span(&self.if_exists)
             .join_span(&self.index_name)
-            .join_span(&self.on_span)
-            .join_span(&self.table_name)
+            .join_span(&self.on)
     }
 }
