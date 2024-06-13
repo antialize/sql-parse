@@ -99,6 +99,74 @@ impl Spanned for JoinType {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum IndexHintUse {
+    Use(Span),
+    Ignore(Span),
+    Force(Span),
+}
+impl Spanned for IndexHintUse {
+    fn span(&self) -> Span {
+        match &self {
+            IndexHintUse::Use(v) => v.span(),
+            IndexHintUse::Ignore(v) => v.span(),
+            IndexHintUse::Force(v) => v.span(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum IndexHintType {
+    Index(Span),
+    Key(Span),
+}
+impl Spanned for IndexHintType {
+    fn span(&self) -> Span {
+        match &self {
+            IndexHintType::Index(v) => v.span(),
+            IndexHintType::Key(v) => v.span(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum IndexHintFor {
+    Join(Span),
+    OrderBy(Span),
+    GroupBy(Span),
+}
+impl Spanned for IndexHintFor {
+    fn span(&self) -> Span {
+        match &self {
+            IndexHintFor::Join(v) => v.span(),
+            IndexHintFor::OrderBy(v) => v.span(),
+            IndexHintFor::GroupBy(v) => v.span(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexHint<'a> {
+    use_: IndexHintUse,
+    type_: IndexHintType,
+    for_: Option<(Span, IndexHintFor)>,
+    lparen: Span,
+    index_list: Vec<Identifier<'a>>,
+    rparen: Span,
+}
+
+impl<'a> Spanned for IndexHint<'a> {
+    fn span(&self) -> Span {
+        self.use_
+            .span()
+            .join_span(&self.type_)
+            .join_span(&self.for_)
+            .join_span(&self.lparen)
+            .join_span(&self.index_list)
+            .join_span(&self.rparen)
+    }
+}
+
 /// Reference to table in select
 #[derive(Debug, Clone)]
 pub enum TableReference<'a> {
@@ -110,6 +178,8 @@ pub enum TableReference<'a> {
         as_span: Option<Span>,
         /// Alias for table if specified
         as_: Option<Identifier<'a>>,
+        /// Index hints
+        index_hints: Vec<IndexHint<'a>>,
     },
     /// Subquery
     Query {
@@ -141,9 +211,11 @@ impl<'a> Spanned for TableReference<'a> {
                 identifier,
                 as_span,
                 as_,
+                index_hints,
             } => identifier
                 .opt_join_span(as_span)
                 .opt_join_span(as_)
+                .opt_join_span(index_hints)
                 .expect("span of table"),
             TableReference::Query {
                 query,
@@ -193,19 +265,6 @@ pub(crate) fn parse_table_reference_inner<'a>(
         Token::Ident(_, _) => {
             let identifier = parse_qualified_name(parser)?;
 
-            // index_hint_list:
-            //     index_hint [, index_hint] ...
-
-            // index_hint: {
-            //     USE {INDEX|KEY}
-            //       [FOR {JOIN|ORDER BY|GROUP BY}] ([index_list])
-            //   | {IGNORE|FORCE} {INDEX|KEY}
-            //       [FOR {JOIN|ORDER BY|GROUP BY}] (index_list)
-            // }
-
-            // index_list:
-            //     index_name [, index_name] .
-
             // TODO [PARTITION (partition_names)] [[AS] alias]
             let as_span = parser.skip_keyword(Keyword::AS);
             let as_ = if as_span.is_some()
@@ -216,11 +275,75 @@ pub(crate) fn parse_table_reference_inner<'a>(
                 None
             };
 
-            // TODO [index_hint_list]
+            let mut index_hints = Vec::new();
+            loop {
+                let use_ = match parser.token {
+                    Token::Ident(_, Keyword::USE) => IndexHintUse::Use(parser.consume()),
+                    Token::Ident(_, Keyword::IGNORE) => IndexHintUse::Ignore(parser.consume()),
+                    Token::Ident(_, Keyword::FORCE) => IndexHintUse::Force(parser.consume()),
+                    _ => break,
+                };
+                let type_ = match parser.token {
+                    Token::Ident(_, Keyword::INDEX) => IndexHintType::Index(parser.consume()),
+                    Token::Ident(_, Keyword::KEY) => IndexHintType::Key(parser.consume()),
+                    _ => parser.expected_failure("'INDEX' or 'KEY'")?,
+                };
+                let for_ = if let Some(for_span) = parser.skip_keyword(Keyword::FOR) {
+                    let v = match parser.token {
+                        Token::Ident(_, Keyword::JOIN) => IndexHintFor::Join(parser.consume()),
+                        Token::Ident(_, Keyword::GROUP) => IndexHintFor::GroupBy(
+                            parser.consume_keywords(&[Keyword::GROUP, Keyword::BY])?,
+                        ),
+                        Token::Ident(_, Keyword::ORDER) => IndexHintFor::OrderBy(
+                            parser.consume_keywords(&[Keyword::ORDER, Keyword::BY])?,
+                        ),
+                        _ => parser.expected_failure("'JOIN', 'GROUP BY' or 'ORDER BY'")?,
+                    };
+                    Some((for_span, v))
+                } else {
+                    None
+                };
+                let lparen = parser.consume_token(Token::LParen)?;
+                let mut index_list = Vec::new();
+                loop {
+                    parser.recovered(
+                        "')' or ','",
+                        &|t| matches!(t, Token::RParen | Token::Comma),
+                        |parser| {
+                            index_list.push(parser.consume_plain_identifier()?);
+                            Ok(())
+                        },
+                    )?;
+                    if matches!(parser.token, Token::RParen) {
+                        break;
+                    }
+                    parser.consume_token(Token::Comma)?;
+                }
+                let rparen = parser.consume_token(Token::RParen)?;
+                index_hints.push(IndexHint {
+                    use_,
+                    type_,
+                    for_,
+                    lparen,
+                    index_list,
+                    rparen,
+                })
+            }
+
+            if !index_hints.is_empty() {
+                if !parser.options.dialect.is_maria() {
+                    parser.issues.push(Issue::err(
+                        "Index hints only supported by MariaDb",
+                        &index_hints.opt_span().unwrap(),
+                    ));
+                }
+            }
+
             Ok(TableReference::Table {
                 identifier,
                 as_span,
                 as_,
+                index_hints,
             })
         }
         _ => parser.expected_failure("subquery or identifier"),
