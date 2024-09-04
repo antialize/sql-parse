@@ -227,7 +227,7 @@ macro_rules! issue_todo {
 /// added to issues
 pub fn parse_statements<'a>(
     src: &'a str,
-    issues: &mut Vec<Issue>,
+    issues: &mut Vec<Issue<'a>>,
     options: &ParseOptions,
 ) -> Vec<Statement<'a>> {
     let mut parser = Parser::new(src, issues, options);
@@ -240,7 +240,7 @@ pub fn parse_statements<'a>(
 /// added to issues
 pub fn parse_statement<'a>(
     src: &'a str,
-    issues: &mut Vec<Issue>,
+    issues: &mut Vec<Issue<'a>>,
     options: &ParseOptions,
 ) -> Option<Statement<'a>> {
     let mut parser = Parser::new(src, issues, options);

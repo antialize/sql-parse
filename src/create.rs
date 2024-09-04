@@ -940,10 +940,7 @@ fn parse_create_type<'a>(
 ) -> Result<Statement<'a>, ParseError> {
     let type_span = parser.consume_keyword(Keyword::TYPE)?;
     if !parser.options.dialect.is_postgresql() {
-        parser.issues.push(Issue::err(
-            "CREATE TYPE only supported by postgresql",
-            &type_span,
-        ));
+        parser.add_error("CREATE TYPE only supported by postgresql", &type_span);
     }
     let name = parser.consume_plain_identifier()?;
     let as_enum_span = parser.consume_keywords(&[Keyword::AS, Keyword::ENUM])?;
@@ -1052,10 +1049,10 @@ fn parse_create_index<'a>(
     if let Some(where_span) = parser.skip_keyword(Keyword::WHERE) {
         let where_expr = parse_expression(parser, false)?;
         if parser.options.dialect.is_maria() {
-            parser.issues.push(Issue::err(
+            parser.add_error(
                 "Partial indexes not supported",
                 &where_span.join_span(&where_expr),
-            ));
+            );
         }
         where_ = Some((where_span, where_expr));
     }

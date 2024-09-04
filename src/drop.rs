@@ -454,15 +454,10 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a
             };
 
             if v.on.is_none() && parser.options.dialect.is_maria() {
-                parser
-                    .issues
-                    .push(Issue::err("On required for index drops in MariaDb", &v));
+                parser.add_error("On required for index drops in MariaDb", &v);
             }
             if v.on.is_some() && parser.options.dialect.is_postgresql() {
-                parser.issues.push(Issue::err(
-                    "On not supported for index drops in PostgreSQL",
-                    &v,
-                ));
+                parser.add_error("On not supported for index drops in PostgreSQL", &v);
             }
             Ok(Statement::DropIndex(v))
         }

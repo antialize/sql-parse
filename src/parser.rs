@@ -28,7 +28,7 @@ pub(crate) struct Parser<'a, 'b> {
     pub(crate) token: Token<'a>,
     pub(crate) span: Span,
     pub(crate) lexer: Lexer<'a>,
-    pub(crate) issues: &'b mut Vec<Issue>,
+    pub(crate) issues: &'b mut Vec<Issue<'a>>,
     pub(crate) arg: usize,
     pub(crate) delimiter: Token<'a>,
     pub(crate) options: &'b ParseOptions,
@@ -91,7 +91,11 @@ impl<'a> alloc::fmt::Display for SingleQuotedString<'a> {
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
-    pub(crate) fn new(src: &'a str, issues: &'b mut Vec<Issue>, options: &'b ParseOptions) -> Self {
+    pub(crate) fn new(
+        src: &'a str,
+        issues: &'b mut Vec<Issue<'a>>,
+        options: &'b ParseOptions,
+    ) -> Self {
         let mut lexer = Lexer::new(src);
         let (token, span) = lexer.next_token();
         Self {
@@ -194,8 +198,17 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     pub(crate) fn expected_error(&mut self, name: &'static str) {
+        self.add_error(format!("Expected '{}' here", name), &self.span.span());
+    }
+
+    pub(crate) fn add_error(&mut self, message: impl Into<String>, span: &impl Spanned) {
         self.issues
-            .push(Issue::err(format!("Expected '{}' here", name), &self.span));
+            .push(Issue::err(message, span, self.lexer.s(span.span())));
+    }
+
+    pub(crate) fn add_warn(&mut self, message: impl Into<String>, span: &impl Spanned) {
+        self.issues
+            .push(Issue::warn(message, span, self.sql_segment(span.span())));
     }
 
     pub(crate) fn expected_failure<T>(&mut self, name: &'static str) -> Result<T, ParseError> {
@@ -212,17 +225,14 @@ impl<'a, 'b> Parser<'a, 'b> {
             Token::Ident(v, kw) => {
                 let v = *v;
                 if kw.reserved() {
-                    self.issues.push(Issue::err(
+                    self.add_error(
                         format!("'{}' is a reserved identifier use `{}`", v, v),
                         &span,
-                    ));
+                    );
                 } else if kw != &Keyword::QUOTED_IDENTIFIER
                     && self.options.warn_unquoted_identifiers
                 {
-                    self.issues.push(Issue::warn(
-                        format!("identifiers should be quoted as `{}`", v),
-                        &span,
-                    ));
+                    self.add_warn(format!("identifiers should be quoted as `{}`", v), &span);
                 }
                 Ok(Identifier::new(v, span))
             }
@@ -235,23 +245,23 @@ impl<'a, 'b> Parser<'a, 'b> {
             Token::Ident(v, kw) => {
                 let v = *v;
                 if kw.reserved() {
-                    self.issues.push(Issue::err(
+                    self.add_error(
                         format!("'{}' is a reserved identifier use `{}`", v, v),
-                        &self.span,
-                    ));
+                        &self.span.span(),
+                    );
                 } else if kw != &Keyword::QUOTED_IDENTIFIER
                     && self.options.warn_unquoted_identifiers
                 {
-                    self.issues.push(Issue::warn(
+                    self.add_warn(
                         format!("identifiers should be quoted as `{}`", v),
-                        &self.span,
-                    ));
+                        &self.span.span(),
+                    );
                 } else if kw == &Keyword::QUOTED_IDENTIFIER && self.options.dialect.is_postgresql()
                 {
-                    self.issues.push(Issue::err(
+                    self.add_error(
                         "quoted identifiers not supported by postgresql",
-                        &self.span,
-                    ));
+                        &self.span.span(),
+                    );
                 }
                 Ok(Identifier::new(v, self.consume()))
             }
@@ -268,14 +278,14 @@ impl<'a, 'b> Parser<'a, 'b> {
                 if !v.chars().all(|c| c.is_ascii_uppercase())
                     && self.options.warn_none_capital_keywords
                 {
-                    self.issues.push(Issue::warn(
+                    self.add_warn(
                         format!(
                             "keyword {} should be in ALL CAPS {}",
                             v,
                             v.to_ascii_uppercase()
                         ),
-                        &self.span,
-                    ));
+                        &self.span.span(),
+                    );
                 }
                 Ok(self.consume())
             }
@@ -389,7 +399,7 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     pub(crate) fn error<T>(&mut self, message: impl Into<String>) -> Result<T, ParseError> {
-        self.issues.push(Issue::err(message, &self.span));
+        self.add_error(message, &self.span.span());
         Err(ParseError::Unrecovered)
     }
 
@@ -399,5 +409,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
     pub(crate) fn todo<T>(&mut self, file: &'static str, line: u32) -> Result<T, ParseError> {
         self.error(format!("Not yet implemented at {}:{}", file, line))
+    }
+    pub(crate) fn sql_segment(&self, span: Span) -> &'a str {
+        &self.lexer.s(span)
     }
 }

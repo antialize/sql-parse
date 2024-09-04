@@ -332,10 +332,10 @@ pub(crate) fn parse_table_reference_inner<'a>(
 
             if !index_hints.is_empty() {
                 if !parser.options.dialect.is_maria() {
-                    parser.issues.push(Issue::err(
+                    parser.add_error(
                         "Index hints only supported by MariaDb",
                         &index_hints.opt_span().unwrap(),
-                    ));
+                    );
                 }
             }
 
@@ -830,9 +830,7 @@ pub(crate) fn parse_select<'a>(parser: &mut Parser<'a, '_>) -> Result<Select<'a>
 
         if let LockStrength::NoKeyUpdate(s) | LockStrength::KeyShare(s) = &strength {
             if !parser.options.dialect.is_postgresql() {
-                parser
-                    .issues
-                    .push(Issue::err("Only support by PostgreSQL", s));
+                parser.add_error("Only support by PostgreSQL", s);
             }
         }
 
