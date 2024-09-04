@@ -291,17 +291,13 @@ pub(crate) fn parse_insert_replace<'a>(
             InsertReplaceFlag::LowPriority(_) => {}
             InsertReplaceFlag::HighPriority(s) => {
                 if !insert {
-                    parser
-                        .issues
-                        .push(Issue::err("Not supported for replace", s));
+                    parser.add_error("Not supported for replace", s);
                 }
             }
             InsertReplaceFlag::Delayed(_) => {}
             InsertReplaceFlag::Ignore(s) => {
                 if !insert {
-                    parser
-                        .issues
-                        .push(Issue::err("Not supported for replace", s));
+                    parser.add_error("Not supported for replace", s);
                 }
             }
         }
@@ -373,8 +369,16 @@ pub(crate) fn parse_insert_replace<'a>(
             }
             if let Some(cs) = columns.opt_span() {
                 parser.issues.push(
-                    Issue::err("Columns may not be used here", &cs)
-                        .frag("Together with SET", &set_span),
+                    Issue::err(
+                        "Columns may not be used here",
+                        &cs,
+                        &parser.sql_segment(cs.span()),
+                    )
+                    .frag(
+                        "Together with SET",
+                        &set_span,
+                        &parser.sql_segment(set_span.span()),
+                    ),
                 );
             }
             set = Some(InsertReplaceSet { set_span, pairs });
@@ -410,10 +414,10 @@ pub(crate) fn parse_insert_replace<'a>(
                         }
                     }
                     if !parser.options.dialect.is_maria() {
-                        parser.issues.push(Issue::err(
+                        parser.add_error(
                             "Only support by mariadb",
                             &on_duplicate_key_update_span.join_span(&pairs),
-                        ));
+                        );
                     }
                     (
                         Some(InsertReplaceOnDuplicateKeyUpdate {
@@ -490,9 +494,7 @@ pub(crate) fn parse_insert_replace<'a>(
                     };
 
                     if !parser.options.dialect.is_postgresql() {
-                        parser
-                            .issues
-                            .push(Issue::err("Only support by postgesql", &on_conflict));
+                        parser.add_error("Only support by postgesql", &on_conflict);
                     }
 
                     (None, Some(on_conflict))

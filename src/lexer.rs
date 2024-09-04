@@ -147,7 +147,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn s(&self, span: Span) -> &'a str {
+    pub(crate) fn s(&self, span: Span) -> &'a str {
         core::str::from_utf8(&self.src.as_bytes()[span]).unwrap()
     }
 

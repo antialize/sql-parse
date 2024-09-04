@@ -521,9 +521,7 @@ fn parse_add_alter_specification<'a>(
 
             if let Some(s) = &if_not_exists_span {
                 if parser.options.dialect.is_maria() {
-                    parser
-                        .issues
-                        .push(Issue::err("IF NOT EXIST is not supported", s));
+                    parser.add_error("IF NOT EXIST is not supported", s);
                 }
             }
 

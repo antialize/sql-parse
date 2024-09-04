@@ -101,10 +101,10 @@ pub(crate) fn parse_with_query<'a>(
                         | Statement::Update(_)
                         | Statement::Delete(_)
                 ) {
-                    parser.issues.push(Issue::err(
+                    parser.add_error(
                         "Only SELECT, INSERT, UPDATE or DELETE allowed within WITH query",
                         &v.span(),
-                    ));
+                    );
                 }
                 v
             }
@@ -131,10 +131,10 @@ pub(crate) fn parse_with_query<'a>(
                     | Statement::Update(_)
                     | Statement::Delete(_)
             ) {
-                parser.issues.push(Issue::err(
+                parser.add_error(
                     "Only SELECT, INSERT, UPDATE or DELETE allowed as WITH query",
                     &v.span(),
-                ));
+                );
             }
             Box::new(v)
         }
@@ -146,10 +146,7 @@ pub(crate) fn parse_with_query<'a>(
         statement,
     };
     if !parser.options.dialect.is_postgresql() {
-        parser.issues.push(Issue::err(
-            "WITH statements only supported by postgresql",
-            &res.span(),
-        ));
+        parser.add_error("WITH statements only supported by postgresql", &res.span());
     }
     Ok(res)
 }

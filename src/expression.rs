@@ -736,9 +736,7 @@ fn parse_function<'a>(
         Token::Ident(_, Keyword::JSON_VALUE) => Function::JsonValue,
         Token::Ident(v, k) if !k.reserved() => Function::Other(v),
         _ => {
-            parser
-                .issues
-                .push(crate::Issue::err("Unknown function", &span));
+            parser.add_error("Unknown function", &span);
             Function::Unknown
         }
     };

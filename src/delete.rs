@@ -147,10 +147,10 @@ pub(crate) fn parse_delete<'a>(parser: &mut Parser<'a, '_>) -> Result<Delete<'a>
 
     if let Some(using_span) = parser.skip_keyword(Keyword::USING) {
         if !using.is_empty() {
-            parser.issues.push(Issue::err(
+            parser.add_error(
                 "Using not allowed in delete with table names before FROM",
                 &using_span,
-            ));
+            );
         }
         loop {
             using.push(parse_table_reference(parser)?);
