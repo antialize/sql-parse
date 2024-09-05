@@ -20,7 +20,7 @@ use crate::{
     qualified_name::parse_qualified_name,
     select::{parse_select, Select},
     statement::parse_statement,
-    DataType, Expression, Identifier, Issue, QualifiedName, SString, Span, Spanned, Statement,
+    DataType, Expression, Identifier, QualifiedName, SString, Span, Spanned, Statement,
 };
 
 /// Options on created table
@@ -505,7 +505,7 @@ impl Spanned for FunctionParamDirection {
 ///
 /// This is not fully implemented yet
 ///
-/// ```ignore
+/// ```
 /// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateFunction, Statement};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
 /// # let mut issues = Vec::new();
@@ -515,12 +515,13 @@ impl Spanned for FunctionParamDirection {
 /// BEGIN
 ///     SET c = 100;
 ///     RETURN a + b;
-/// END;
+/// END
 /// $$
 /// DELIMITER ;";
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// assert!(issues.is_empty());
+///
+/// assert!(issues.is_empty(),"Issues: {:#?}", issues);
 /// #
 /// let create: CreateFunction = match stmts.pop() {
 ///     Some(Statement::CreateFunction(c)) => c,
@@ -528,7 +529,7 @@ impl Spanned for FunctionParamDirection {
 /// };
 ///
 /// assert!(create.name.as_str() == "add_func3");
-/// println!("{:#?}", create.return_)
+///
 /// ```
 #[derive(Clone, Debug)]
 pub struct CreateFunction<'a> {
@@ -548,10 +549,8 @@ pub struct CreateFunction<'a> {
     pub returns_span: Span,
     /// Type of return value
     pub return_type: DataType<'a>,
-    /// Characteristics of created function
-    pub characteristics: Vec<FunctionCharacteristic<'a>>,
-    /// Statement computing return value
-    pub return_: Option<Box<Statement<'a>>>,
+    /// Statement of function body
+    pub statement: Box<Statement<'a>>,
 }
 
 impl<'a> Spanned for CreateFunction<'a> {
@@ -562,8 +561,7 @@ impl<'a> Spanned for CreateFunction<'a> {
             .join_span(&self.if_not_exists)
             .join_span(&self.name)
             .join_span(&self.return_type)
-            .join_span(&self.characteristics)
-            .join_span(&self.return_)
+            .join_span(&self.statement)
     }
 }
 
@@ -607,10 +605,6 @@ fn parse_create_function<'a>(
                 _ => None,
             };
 
-            if parser.options.dialect.is_maria() && direction.is_none() {
-                parser.expected_error("'IN', 'OUT' or 'INOUT'");
-            }
-
             let name = parser.consume_plain_identifier()?;
             let type_ = parse_data_type(parser, false)?;
             params.push((direction, name, type_));
@@ -638,78 +632,12 @@ fn parse_create_function<'a>(
         }
     }
 
-    let mut characteristics = Vec::new();
-    loop {
-        let f = match &parser.token {
-            Token::Ident(_, Keyword::LANGUAGE) => {
-                let lg = parser.consume();
-                match &parser.token {
-                    Token::Ident(_, Keyword::SQL) => {
-                        FunctionCharacteristic::LanguageSql(lg.join_span(&parser.consume()))
-                    }
-                    Token::Ident(_, Keyword::PLPGSQL) => {
-                        FunctionCharacteristic::LanguagePlpgsql(lg.join_span(&parser.consume()))
-                    }
-                    _ => parser.expected_failure("language name")?,
-                }
-            }
-            Token::Ident(_, Keyword::NOT) => FunctionCharacteristic::NotDeterministic(
-                parser.consume_keywords(&[Keyword::NOT, Keyword::DETERMINISTIC])?,
-            ),
-            Token::Ident(_, Keyword::DETERMINISTIC) => FunctionCharacteristic::Deterministic(
-                parser.consume_keyword(Keyword::DETERMINISTIC)?,
-            ),
-            Token::Ident(_, Keyword::CONTAINS) => FunctionCharacteristic::ContainsSql(
-                parser.consume_keywords(&[Keyword::CONTAINS, Keyword::SQL])?,
-            ),
-            Token::Ident(_, Keyword::NO) => FunctionCharacteristic::NoSql(
-                parser.consume_keywords(&[Keyword::NO, Keyword::SQL])?,
-            ),
-            Token::Ident(_, Keyword::READS) => {
-                FunctionCharacteristic::ReadsSqlData(parser.consume_keywords(&[
-                    Keyword::READS,
-                    Keyword::SQL,
-                    Keyword::DATA,
-                ])?)
-            }
-            Token::Ident(_, Keyword::MODIFIES) => {
-                FunctionCharacteristic::ModifiesSqlData(parser.consume_keywords(&[
-                    Keyword::MODIFIES,
-                    Keyword::SQL,
-                    Keyword::DATA,
-                ])?)
-            }
-            Token::Ident(_, Keyword::COMMENT) => {
-                parser.consume_keyword(Keyword::COMMENT)?;
-                FunctionCharacteristic::Comment(parser.consume_string()?)
-            }
-            Token::Ident(_, Keyword::SQL) => {
-                let span = parser.consume_keywords(&[Keyword::SQL, Keyword::SECURITY])?;
-                match &parser.token {
-                    Token::Ident(_, Keyword::DEFINER) => {
-                        FunctionCharacteristic::SqlSecurityDefiner(
-                            parser.consume_keyword(Keyword::DEFINER)?.join_span(&span),
-                        )
-                    }
-                    Token::Ident(_, Keyword::USER) => FunctionCharacteristic::SqlSecurityUser(
-                        parser.consume_keyword(Keyword::USER)?.join_span(&span),
-                    ),
-                    _ => parser.expected_failure("'DEFINER' or 'USER'")?,
-                }
-            }
-            _ => break,
-        };
-        characteristics.push(f);
-    }
-
-    let return_ = if parser.options.dialect.is_maria() {
-        match parse_statement(parser)? {
-            Some(v) => Some(Box::new(v)),
-            None => parser.expected_failure("statement")?,
-        }
-    } else {
-        None
+    let old = core::mem::replace(&mut parser.permit_compound_statements, true);
+    let statement = match parse_statement(parser)? {
+        Some(v) => v,
+        None => parser.expected_failure("statement")?,
     };
+    parser.permit_compound_statements = old;
 
     Ok(Statement::CreateFunction(CreateFunction {
         create_span,
@@ -718,10 +646,9 @@ fn parse_create_function<'a>(
         if_not_exists,
         name,
         params,
-        return_type,
-        characteristics,
-        return_,
         returns_span,
+        return_type,
+        statement: Box::new(statement),
     }))
 }
 

@@ -19,7 +19,7 @@ use crate::{
     parser::{ParseError, Parser},
     qualified_name::parse_qualified_name,
     select::{parse_select_expr, parse_table_reference},
-    Issue, QualifiedName, SelectExpr, Span, Spanned, TableReference,
+    QualifiedName, SelectExpr, Span, Spanned, TableReference,
 };
 
 /// Flags for deletion

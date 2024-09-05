@@ -397,3 +397,26 @@ pub fn parse_use_index() {
     let _result = parse_statement(sql, &mut issues, &options);
     assert!(issues.is_empty(), "Issues: {:#?}", issues);
 }
+
+#[test]
+pub fn parse_create_function_sql_with_schema() {
+    let sql = "
+    DELIMITER $$
+    CREATE DEFINER=`root`@`%` FUNCTION `name_for_id`(id INT(11))
+        RETURNS VARCHAR(20)
+        COMMENT ''
+        BEGIN
+            RETURN(SELECT name FROM student tb WHERE tb.id = id);
+        END
+        $$
+    DELIMITER ;";
+    let options = ParseOptions::new()
+        .dialect(SQLDialect::MariaDB)
+        .arguments(SQLArguments::QuestionMark)
+        .warn_unquoted_identifiers(false);
+
+    let mut issues = Vec::new();
+    let _result = parse_statements(sql, &mut issues, &options);
+    // assert!(result.len() <= 0, "result: {:#?}", &result);
+    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+}

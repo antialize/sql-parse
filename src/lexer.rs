@@ -445,7 +445,7 @@ impl<'a> Lexer<'a> {
                 '`' => {
                     while matches!(
                         self.chars.peek(),
-                        Some((_, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9' | '-'))
+                        Some((_, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '%'))
                     ) {
                         self.chars.next();
                     }

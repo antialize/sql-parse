@@ -17,7 +17,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     qualified_name::parse_qualified_name,
-    DataType, Identifier, Issue, QualifiedName, SString, Span, Spanned, Statement,
+    DataType, Identifier, QualifiedName, SString, Span, Spanned, Statement,
 };
 
 /// Option on an index
