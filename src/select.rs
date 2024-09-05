@@ -12,6 +12,7 @@
 use alloc::{boxed::Box, vec::Vec};
 
 use crate::qualified_name::parse_qualified_name;
+use crate::QualifiedName;
 use crate::{
     expression::{parse_expression, Expression},
     keywords::Keyword,
@@ -21,7 +22,6 @@ use crate::{
     statement::parse_compound_query,
     Identifier, Span, Spanned, Statement,
 };
-use crate::{Issue, QualifiedName};
 
 /// Value in select
 #[derive(Debug, Clone)]

@@ -5,7 +5,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     statement::parse_statement,
-    Identifier, Issue, Span, Spanned, Statement,
+    Identifier, Span, Spanned, Statement,
 };
 
 #[derive(Clone, Debug)]

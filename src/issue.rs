@@ -12,7 +12,7 @@
 
 use alloc::{string::String, vec::Vec};
 
-use crate::{SString, Span, Spanned};
+use crate::{Span, Spanned};
 
 /// Level of an issues
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -66,7 +66,8 @@ impl<'a> Issue<'a> {
         span: &impl Spanned,
         sql_segment: &'a str,
     ) -> Self {
-        self.fragments.push((message.into(), span.span(),sql_segment));
+        self.fragments
+            .push((message.into(), span.span(), sql_segment));
         self
     }
 }

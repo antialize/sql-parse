@@ -277,6 +277,7 @@ pub enum Statement<'a> {
     TruncateTable(TruncateTable<'a>),
     RenameTable(RenameTable<'a>),
     WithQuery(WithQuery<'a>),
+    Return(Return<'a>),
 }
 
 impl<'a> Spanned for Statement<'a> {
@@ -318,6 +319,7 @@ impl<'a> Spanned for Statement<'a> {
             Statement::TruncateTable(v) => v.span(),
             Statement::RenameTable(v) => v.span(),
             Statement::WithQuery(v) => v.span(),
+            Statement::Return(v) => v.span(),
         }
     }
 }
@@ -366,6 +368,7 @@ pub(crate) fn parse_statement<'a>(
             Some(Statement::RenameTable(parse_rename_table(parser)?))
         }
         Token::Ident(_, Keyword::WITH) => Some(Statement::WithQuery(parse_with_query(parser)?)),
+        Token::Ident(_, Keyword::RETURN) => Some(Statement::Return(parse_return(parser)?)),
         _ => None,
     })
 }
@@ -741,4 +744,69 @@ pub(crate) fn parse_statements<'a>(parser: &mut Parser<'a, '_>) -> Vec<Statement
                 .expect("Delimiter");
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum ReturnExpression<'a> {
+    Expression(Box<Expression<'a>>),
+    Select(Box<Select<'a>>),
+}
+
+impl<'a> Spanned for ReturnExpression<'a> {
+    fn span(&self) -> Span {
+        match &self {
+            ReturnExpression::Expression(v) => v.span(),
+            ReturnExpression::Select(v) => v.span(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Return<'a> {
+    pub return_span: Span,
+    pub statement: Option<ReturnExpression<'a>>,
+}
+
+impl<'a> Spanned for Return<'a> {
+    fn span(&self) -> Span {
+        match &self.statement {
+            Some(v) => v.join_span(&self.return_span),
+            None => self.return_span.span(),
+        }
+    }
+}
+
+fn parse_return<'a>(parser: &mut Parser<'a, '_>) -> Result<Return<'a>, ParseError> {
+    let return_span = parser.consume_keyword(Keyword::RETURN)?;
+    loop {
+        if Token::LParen == parser.token {
+            let _ = parser.skip_token(Token::LParen);
+        } else {
+            break;
+        }
+    }
+    let statement = match &parser.token {
+        Token::Ident(_, Keyword::SELECT) => {
+            Some(ReturnExpression::Select(Box::new(parse_select(parser)?)))
+        }
+        Token::Eof => None,
+        _ => Some(ReturnExpression::Expression(Box::new(parse_expression(
+            parser, false,
+        )?))),
+    };
+    loop {
+        match &parser.token {
+            Token::RParen => {
+                parser.skip_token(Token::RParen);
+            }
+            // Token::SemiColon => {
+            //     parser.skip_token(Token::SemiColon);
+            // }
+            _ => break,
+        }
+    }
+    Ok(Return {
+        return_span,
+        statement,
+    })
 }
