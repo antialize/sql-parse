@@ -256,6 +256,130 @@ fn parse_return<'a>(parser: &mut Parser<'a, '_>) -> Result<Return<'a>, ParseErro
     let expr = parse_expression(parser, false)?;
     Ok(Return { return_span, expr })
 }
+
+#[derive(Clone, Debug)]
+pub enum SignalConditionInformationName {
+    ClassOrigin(Span),
+    SubclassOrigin(Span),
+    MessageText(Span),
+    MysqlErrno(Span),
+    ConstraintCatalog(Span),
+    ConstraintSchema(Span),
+    ConstraintName(Span),
+    CatalogName(Span),
+    SchemaName(Span),
+    TableName(Span),
+    ColumnName(Span),
+    CursorName(Span),
+}
+
+impl Spanned for SignalConditionInformationName {
+    fn span(&self) -> Span {
+        match self {
+            SignalConditionInformationName::ClassOrigin(span) => span.clone(),
+            SignalConditionInformationName::SubclassOrigin(span) => span.clone(),
+            SignalConditionInformationName::MessageText(span) => span.clone(),
+            SignalConditionInformationName::MysqlErrno(span) => span.clone(),
+            SignalConditionInformationName::ConstraintCatalog(span) => span.clone(),
+            SignalConditionInformationName::ConstraintSchema(span) => span.clone(),
+            SignalConditionInformationName::ConstraintName(span) => span.clone(),
+            SignalConditionInformationName::CatalogName(span) => span.clone(),
+            SignalConditionInformationName::SchemaName(span) => span.clone(),
+            SignalConditionInformationName::TableName(span) => span.clone(),
+            SignalConditionInformationName::ColumnName(span) => span.clone(),
+            SignalConditionInformationName::CursorName(span) => span.clone(),
+        }
+    }
+}
+
+/// Return statement
+#[derive(Clone, Debug)]
+pub struct Signal<'a> {
+    pub signal_span: Span,
+    pub sqlstate_span: Span,
+    pub value_span: Option<Span>,
+    pub sql_state: Expression<'a>,
+    pub set_span: Option<Span>,
+    pub sets: Vec<(SignalConditionInformationName, Span, Expression<'a>)>,
+}
+
+impl<'a> Spanned for Signal<'a> {
+    fn span(&self) -> Span {
+        self.signal_span
+            .join_span(&self.sqlstate_span)
+            .join_span(&self.value_span)
+            .join_span(&self.sql_state)
+            .join_span(&self.set_span)
+            .join_span(&self.sets)
+    }
+}
+
+fn parse_signal<'a>(parser: &mut Parser<'a, '_>) -> Result<Signal<'a>, ParseError> {
+    let signal_span = parser.consume_keyword(Keyword::SIGNAL)?;
+    let sqlstate_span = parser.consume_keyword(Keyword::SQLSTATE)?;
+    let value_span = parser.skip_keyword(Keyword::VALUE);
+    let sql_state = parse_expression(parser, false)?;
+    let mut sets = Vec::new();
+    let set_span = parser.skip_keyword(Keyword::SET);
+    if set_span.is_some() {
+        loop {
+            let v = match &parser.token {
+                Token::Ident(_, Keyword::CLASS_ORIGIN) => {
+                    SignalConditionInformationName::ClassOrigin(parser.consume())
+                }
+                Token::Ident(_, Keyword::SUBCLASS_ORIGIN) => {
+                    SignalConditionInformationName::SubclassOrigin(parser.consume())
+                }
+                Token::Ident(_, Keyword::MESSAGE_TEXT) => {
+                    SignalConditionInformationName::MessageText(parser.consume())
+                }
+                Token::Ident(_, Keyword::MYSQL_ERRNO) => {
+                    SignalConditionInformationName::MysqlErrno(parser.consume())
+                }
+                Token::Ident(_, Keyword::CONSTRAINT_CATALOG) => {
+                    SignalConditionInformationName::ConstraintCatalog(parser.consume())
+                }
+                Token::Ident(_, Keyword::CONSTRAINT_SCHEMA) => {
+                    SignalConditionInformationName::ConstraintSchema(parser.consume())
+                }
+                Token::Ident(_, Keyword::CONSTRAINT_NAME) => {
+                    SignalConditionInformationName::ConstraintName(parser.consume())
+                }
+                Token::Ident(_, Keyword::CATALOG_NAME) => {
+                    SignalConditionInformationName::CatalogName(parser.consume())
+                }
+                Token::Ident(_, Keyword::SCHEMA_NAME) => {
+                    SignalConditionInformationName::SchemaName(parser.consume())
+                }
+                Token::Ident(_, Keyword::TABLE_NAME) => {
+                    SignalConditionInformationName::TableName(parser.consume())
+                }
+                Token::Ident(_, Keyword::COLUMN_NAME) => {
+                    SignalConditionInformationName::ColumnName(parser.consume())
+                }
+                Token::Ident(_, Keyword::CURSOR_NAME) => {
+                    SignalConditionInformationName::CursorName(parser.consume())
+                }
+                _ => parser.expected_failure("Condition information item name")?,
+            };
+            let eq_span = parser.consume_token(Token::Eq)?;
+            let value = parse_expression(parser, false)?;
+            sets.push((v, eq_span, value));
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+    }
+    Ok(Signal {
+        signal_span,
+        sqlstate_span,
+        value_span,
+        sql_state,
+        set_span,
+        sets,
+    })
+}
+
 /// SQL statement
 #[derive(Clone, Debug)]
 pub enum Statement<'a> {
@@ -278,6 +402,7 @@ pub enum Statement<'a> {
     DropTrigger(DropTrigger<'a>),
     DropView(DropView<'a>),
     Set(Set<'a>),
+    Signal(Signal<'a>),
     AlterTable(AlterTable<'a>),
     Block(Vec<Statement<'a>>), //TODO we should include begin and end
     Begin(Span),
@@ -339,6 +464,7 @@ impl<'a> Spanned for Statement<'a> {
             Statement::RenameTable(v) => v.span(),
             Statement::WithQuery(v) => v.span(),
             Statement::Return(v) => v.span(),
+            Statement::Signal(v) => v.span(),
         }
     }
 }
@@ -365,6 +491,7 @@ pub(crate) fn parse_statement<'a>(
         }
         Token::Ident(_, Keyword::UPDATE) => Some(Statement::Update(parse_update(parser)?)),
         Token::Ident(_, Keyword::SET) => Some(Statement::Set(parse_set(parser)?)),
+        Token::Ident(_, Keyword::SIGNAL) => Some(Statement::Signal(parse_signal(parser)?)),
         Token::Ident(_, Keyword::BEGIN) => Some(if parser.permit_compound_statements {
             Statement::Block(parse_block(parser)?)
         } else {
