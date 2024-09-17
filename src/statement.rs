@@ -555,7 +555,7 @@ pub struct CaseStatement<'a> {
     /// Span of "CASE"
     pub case_span: Span,
     /// Value to match against
-    pub value: Box<Expression<'a>>,
+    pub value: Option<Box<Expression<'a>>>,
     /// List of whens
     pub whens: Vec<WhenStatement<'a>>,
     /// Span of "ELSE" and statement to execute if specified
@@ -578,7 +578,12 @@ pub(crate) fn parse_case_statement<'a>(
     parser: &mut Parser<'a, '_>,
 ) -> Result<CaseStatement<'a>, ParseError> {
     let case_span = parser.consume_keyword(Keyword::CASE)?;
-    let value = Box::new(parse_expression(parser, false)?);
+    let value = if !matches!(parser.token, Token::Ident(_, Keyword::WHEN)) {
+        Some(Box::new(parse_expression(parser, false)?))
+    } else {
+        None
+    };
+
     let mut whens = Vec::new();
     let mut else_ = None;
     parser.recovered(
