@@ -18,8 +18,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     qualified_name::parse_qualified_name,
-    select::{parse_select, Select},
-    statement::parse_statement,
+    statement::{parse_compound_query, parse_statement},
     DataType, Expression, Identifier, QualifiedName, SString, Span, Spanned, Statement,
 };
 
@@ -339,7 +338,7 @@ pub struct CreateView<'a> {
     /// Span of "AS"
     pub as_span: Span,
     /// The select statement following "AS"
-    pub select: Select<'a>,
+    pub select: Box<Statement<'a>>,
 }
 
 impl<'a> Spanned for CreateView<'a> {
@@ -431,7 +430,7 @@ fn parse_create_view<'a>(
 
     let as_span = parser.consume_keyword(Keyword::AS)?;
 
-    let select = parse_select(parser)?;
+    let select = parse_compound_query(parser)?;
 
     // TODO [WITH [CASCADED | LOCAL] CHECK OPTION]
 
@@ -442,7 +441,7 @@ fn parse_create_view<'a>(
         if_not_exists,
         name,
         as_span,
-        select,
+        select: Box::new(select),
     }))
 }
 
