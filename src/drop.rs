@@ -17,7 +17,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     qualified_name::parse_qualified_name,
-    Identifier, Issue, QualifiedName, Span, Spanned, Statement,
+    Identifier, QualifiedName, Span, Spanned, Statement,
 };
 
 /// Represent a drop table statement

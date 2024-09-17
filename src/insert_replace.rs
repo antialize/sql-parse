@@ -372,12 +372,12 @@ pub(crate) fn parse_insert_replace<'a>(
                     Issue::err(
                         "Columns may not be used here",
                         &cs,
-                        &parser.sql_segment(cs.span()),
+                        parser.sql_segment(cs.span()),
                     )
                     .frag(
                         "Together with SET",
                         &set_span,
-                        &parser.sql_segment(set_span.span()),
+                        parser.sql_segment(set_span.span()),
                     ),
                 );
             }

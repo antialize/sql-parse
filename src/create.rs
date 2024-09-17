@@ -20,7 +20,7 @@ use crate::{
     qualified_name::parse_qualified_name,
     select::{parse_select, Select},
     statement::parse_statement,
-    DataType, Expression, Identifier, Issue, QualifiedName, SString, Span, Spanned, Statement,
+    DataType, Expression, Identifier, QualifiedName, SString, Span, Spanned, Statement,
 };
 
 /// Options on created table

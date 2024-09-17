@@ -411,6 +411,6 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.error(format!("Not yet implemented at {}:{}", file, line))
     }
     pub(crate) fn sql_segment(&self, span: Span) -> &'a str {
-        &self.lexer.s(span)
+        self.lexer.s(span)
     }
 }
