@@ -19,22 +19,21 @@
 //! Example code:
 //!
 //! ```
-//! use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement};
+//! use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Issues};
 //!
 //! let options = ParseOptions::new()
 //!     .dialect(SQLDialect::MariaDB)
 //!     .arguments(SQLArguments::QuestionMark)
 //!     .warn_unquoted_identifiers(true);
 //!
-//! let mut issues = Vec::new();
 //!
 //! let sql = "SELECT `monkey`,
 //!            FROM `t1` LEFT JOIN `t2` ON `t2`.`id` = `t1.two`
 //!            WHERE `t1`.`id` = ?";
-//!
+//! let mut issues = Issues::new(sql);
 //! let ast = parse_statement(sql, &mut issues, &options);
 //!
-//! println!("Issues: {:#?}", issues);
+//! println!("{}", issues);
 //! println!("AST: {:#?}", ast);
 //! ```
 //!
@@ -70,7 +69,7 @@ mod with_query;
 
 pub use data_type::{DataType, DataTypeProperty, Type};
 pub use identifier::Identifier;
-pub use issue::{Issue, Level};
+pub use issue::{Fragment, Issue, IssueHandle, Issues, Level};
 pub use qualified_name::QualifiedName;
 pub use span::{OptSpanned, Span, Spanned};
 pub use sstring::SString;
@@ -202,22 +201,22 @@ impl ParseOptions {
 /// Construct an "Internal compiler error" issue, containing the current file and line
 #[macro_export]
 macro_rules! issue_ice {
-    ( $spanned:expr ) => {{
-        Issue::err(
+    ( $issues: expr, $spanned:expr ) => {{
+        $issues.err(
             alloc::format!("Internal compiler error in {}:{}", file!(), line!()),
             $spanned,
-        )
+        );
     }};
 }
 
 /// Construct an "Not yet implemented" issue, containing the current file and line
 #[macro_export]
 macro_rules! issue_todo {
-    ( $spanned:expr ) => {{
-        Issue::err(
+    ( $issues: expr, $spanned:expr ) => {{
+        $issues.err(
             alloc::format!("Not yet implemented {}:{}", file!(), line!()),
             $spanned,
-        )
+        );
     }};
 }
 
@@ -227,7 +226,7 @@ macro_rules! issue_todo {
 /// added to issues
 pub fn parse_statements<'a>(
     src: &'a str,
-    issues: &mut Vec<Issue<'a>>,
+    issues: &mut Issues<'a>,
     options: &ParseOptions,
 ) -> Vec<Statement<'a>> {
     let mut parser = Parser::new(src, issues, options);
@@ -240,7 +239,7 @@ pub fn parse_statements<'a>(
 /// added to issues
 pub fn parse_statement<'a>(
     src: &'a str,
-    issues: &mut Vec<Issue<'a>>,
+    issues: &mut Issues<'a>,
     options: &ParseOptions,
 ) -> Option<Statement<'a>> {
     let mut parser = Parser::new(src, issues, options);
@@ -267,9 +266,9 @@ pub fn test_parse_alter_sql() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     parse_statement(sql, &mut issues, &options);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }
 
 #[test]
@@ -280,9 +279,9 @@ pub fn test_parse_delete_sql_with_schema() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     parse_statement(sql, &mut issues, &options);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }
 #[test]
 pub fn parse_create_index_sql_with_schema() {
@@ -292,9 +291,9 @@ pub fn parse_create_index_sql_with_schema() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     parse_statement(sql, &mut issues, &options);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }
 
 #[test]
@@ -305,10 +304,10 @@ pub fn parse_drop_index_sql_with_schema() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }
 
 #[test]
@@ -320,10 +319,10 @@ pub fn parse_create_view_sql_with_schema() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }
 
 #[test]
@@ -334,10 +333,10 @@ pub fn parse_drop_view_sql_with_schema() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }
 
 #[test]
@@ -348,10 +347,10 @@ pub fn parse_truncate_table_sql_with_schema() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }
 
 #[test]
@@ -362,10 +361,10 @@ pub fn parse_rename_table_sql_with_schema() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }
 
 #[test]
@@ -379,10 +378,10 @@ pub fn parse_with_statement() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     let _result = parse_statement(sql, &mut issues, &options);
     // assert!(result.is_none(), "result: {:#?}", &result);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }
 
 #[test]
@@ -393,7 +392,7 @@ pub fn parse_use_index() {
         .arguments(SQLArguments::QuestionMark)
         .warn_unquoted_identifiers(false);
 
-    let mut issues = Vec::new();
+    let mut issues = Issues::new(sql);
     let _result = parse_statement(sql, &mut issues, &options);
-    assert!(issues.is_empty(), "Issues: {:#?}", issues);
+    assert!(issues.is_ok(), "{}", issues);
 }

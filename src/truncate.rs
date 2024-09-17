@@ -7,14 +7,14 @@ use crate::{
 
 /// Represent a truncate table statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, TruncateTable, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, TruncateTable, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "TRUNCATE TABLE `t1`;";
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty(), "Issues: {:#?}", issues);
+/// # assert!(issues.is_ok(), "Issues: {}", issues);
 /// #
 /// let truncate_table: TruncateTable = match stmts.pop() {
 ///     Some(Statement::TruncateTable(c)) => c,

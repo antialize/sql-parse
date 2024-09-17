@@ -22,16 +22,15 @@ use crate::{
 
 /// Represent a drop table statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTable, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTable, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP TABLE `Employees`, `Customers`;";
+/// let mut issues = Issues::new(sql);
 ///
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let delete: DropTable = match stmts.pop() {
 ///     Some(Statement::DropTable(d)) => d,
 ///     _ => panic!("We should get a drop table statement")
@@ -67,16 +66,14 @@ impl<'a> Spanned for DropTable<'a> {
 
 /// Represent a drop view statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropView, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropView, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP VIEW `Employees`, `Customers`;";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let delete: DropView = match stmts.pop() {
 ///     Some(Statement::DropView(d)) => d,
 ///     _ => panic!("We should get a drop table statement")
@@ -110,15 +107,14 @@ impl<'a> Spanned for DropView<'a> {
 
 /// Represent a drop database statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropDatabase, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropDatabase, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP DATABASE mydb;";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
+/// # assert!(issues.is_ok());
 /// #
 /// let s: DropDatabase = match stmts.pop() {
 ///     Some(Statement::DropDatabase(s)) => s,
@@ -150,16 +146,14 @@ impl<'a> Spanned for DropDatabase<'a> {
 
 /// Represent a drop event statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropEvent, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropEvent, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP EVENT myevent;";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let s: DropEvent = match stmts.pop() {
 ///     Some(Statement::DropEvent(s)) => s,
 ///     _ => panic!("We should get a drop event statement")
@@ -190,16 +184,14 @@ impl<'a> Spanned for DropEvent<'a> {
 
 /// Represent a drop function statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropFunction, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropFunction, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP FUNCTION myfunc;";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let s: DropFunction = match stmts.pop() {
 ///     Some(Statement::DropFunction(s)) => s,
 ///     _ => panic!("We should get a drop function statement")
@@ -230,16 +222,14 @@ impl<'a> Spanned for DropFunction<'a> {
 
 /// Represent a drop procedure statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropProcedure, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropProcedure, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP PROCEDURE myproc;";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let s: DropProcedure = match stmts.pop() {
 ///     Some(Statement::DropProcedure(s)) => s,
 ///     _ => panic!("We should get a drop procedure statement")
@@ -270,15 +260,14 @@ impl<'a> Spanned for DropProcedure<'a> {
 
 /// Represent a drop server statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropServer, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropServer, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP SERVER myserver;";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
+/// # assert!(issues.is_ok());
 /// #
 /// let s: DropServer = match stmts.pop() {
 ///     Some(Statement::DropServer(s)) => s,
@@ -310,16 +299,14 @@ impl<'a> Spanned for DropServer<'a> {
 
 /// Represent a drop trigger statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTrigger, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropTrigger, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP TRIGGER IF EXISTS `foo`.`mytrigger`;";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let s: DropTrigger = match stmts.pop() {
 ///     Some(Statement::DropTrigger(s)) => s,
 ///     _ => panic!("We should get a drop trigger statement")
@@ -454,10 +441,10 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a
             };
 
             if v.on.is_none() && parser.options.dialect.is_maria() {
-                parser.add_error("On required for index drops in MariaDb", &v);
+                parser.err("On required for index drops in MariaDb", &v);
             }
             if v.on.is_some() && parser.options.dialect.is_postgresql() {
-                parser.add_error("On not supported for index drops in PostgreSQL", &v);
+                parser.err("On not supported for index drops in PostgreSQL", &v);
             }
             Ok(Statement::DropIndex(v))
         }
@@ -547,16 +534,14 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a
 ///
 /// MariaDB example
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropIndex, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropIndex, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP INDEX IF EXISTS `myindex` ON `bar`;";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let s: DropIndex = match stmts.pop() {
 ///     Some(Statement::DropIndex(s)) => s,
 ///     _ => panic!("We should get a drop trigger statement")
@@ -567,15 +552,14 @@ pub(crate) fn parse_drop<'a>(parser: &mut Parser<'a, '_>) -> Result<Statement<'a
 ///
 /// PostgreSQL example
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropIndex, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, DropIndex, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP INDEX IF EXISTS \"myindex\";";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty(), "{:?}", issues);
+/// # assert!(issues.is_ok(), "{}", issues);
 /// #
 /// let s: DropIndex = match stmts.pop() {
 ///     Some(Statement::DropIndex(s)) => s,

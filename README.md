@@ -12,22 +12,22 @@ on MariaDB/Mysql.
 
 Example code:
 ```rust
-use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement};
+use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Issues};
 
 let options = ParseOptions::new()
     .dialect(SQLDialect::MariaDB)
     .arguments(SQLArguments::QuestionMark)
     .warn_unquoted_identifiers(true);
 
-let mut issues = Vec::new();
 
 let sql = "SELECT `monkey`,
            FROM `t1` LEFT JOIN `t2` ON `t2`.`id` = `t1.two`
            WHERE `t1`.`id` = ?";
 
+let mut issues = Issues::new(sql);
 let ast = parse_statement(sql, &mut issues, &options);
 
-println!("Issues: {:#?}", issues);
+println!("Issues: {}", issues);
 println!("AST: {:#?}", ast);
 ```
 

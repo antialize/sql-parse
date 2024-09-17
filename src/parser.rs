@@ -13,7 +13,7 @@
 use alloc::{borrow::Cow, fmt::Write, format, string::String, vec::Vec};
 
 use crate::{
-    issue::Issue,
+    issue::{IssueHandle, Issues},
     keywords::Keyword,
     lexer::{Lexer, Token},
     Identifier, ParseOptions, SString, Span, Spanned,
@@ -28,7 +28,7 @@ pub(crate) struct Parser<'a, 'b> {
     pub(crate) token: Token<'a>,
     pub(crate) span: Span,
     pub(crate) lexer: Lexer<'a>,
-    pub(crate) issues: &'b mut Vec<Issue<'a>>,
+    pub(crate) issues: &'b mut Issues<'a>,
     pub(crate) arg: usize,
     pub(crate) delimiter: Token<'a>,
     pub(crate) options: &'b ParseOptions,
@@ -91,11 +91,7 @@ impl<'a> alloc::fmt::Display for SingleQuotedString<'a> {
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
-    pub(crate) fn new(
-        src: &'a str,
-        issues: &'b mut Vec<Issue<'a>>,
-        options: &'b ParseOptions,
-    ) -> Self {
+    pub(crate) fn new(src: &'a str, issues: &'b mut Issues<'a>, options: &'b ParseOptions) -> Self {
         let mut lexer = Lexer::new(src);
         let (token, span) = lexer.next_token();
         Self {
@@ -198,17 +194,23 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     pub(crate) fn expected_error(&mut self, name: &'static str) {
-        self.add_error(format!("Expected '{}' here", name), &self.span.span());
+        self.err(format!("Expected '{}' here", name), &self.span.span());
     }
 
-    pub(crate) fn add_error(&mut self, message: impl Into<String>, span: &impl Spanned) {
-        self.issues
-            .push(Issue::err(message, span, self.lexer.s(span.span())));
+    pub(crate) fn err(
+        &mut self,
+        message: impl Into<Cow<'static, str>>,
+        span: &impl Spanned,
+    ) -> IssueHandle<'a, '_> {
+        self.issues.err(message, span)
     }
 
-    pub(crate) fn add_warn(&mut self, message: impl Into<String>, span: &impl Spanned) {
-        self.issues
-            .push(Issue::warn(message, span, self.sql_segment(span.span())));
+    pub(crate) fn warn(
+        &mut self,
+        message: impl Into<Cow<'static, str>>,
+        span: &impl Spanned,
+    ) -> IssueHandle<'a, '_> {
+        self.issues.warn(message, span)
     }
 
     pub(crate) fn expected_failure<T>(&mut self, name: &'static str) -> Result<T, ParseError> {
@@ -225,14 +227,14 @@ impl<'a, 'b> Parser<'a, 'b> {
             Token::Ident(v, kw) => {
                 let v = *v;
                 if kw.reserved() {
-                    self.add_error(
+                    self.err(
                         format!("'{}' is a reserved identifier use `{}`", v, v),
                         &span,
                     );
                 } else if kw != &Keyword::QUOTED_IDENTIFIER
                     && self.options.warn_unquoted_identifiers
                 {
-                    self.add_warn(format!("identifiers should be quoted as `{}`", v), &span);
+                    self.warn(format!("identifiers should be quoted as `{}`", v), &span);
                 }
                 Ok(Identifier::new(v, span))
             }
@@ -245,20 +247,20 @@ impl<'a, 'b> Parser<'a, 'b> {
             Token::Ident(v, kw) => {
                 let v = *v;
                 if kw.reserved() {
-                    self.add_error(
+                    self.err(
                         format!("'{}' is a reserved identifier use `{}`", v, v),
                         &self.span.span(),
                     );
                 } else if kw != &Keyword::QUOTED_IDENTIFIER
                     && self.options.warn_unquoted_identifiers
                 {
-                    self.add_warn(
+                    self.err(
                         format!("identifiers should be quoted as `{}`", v),
                         &self.span.span(),
                     );
                 } else if kw == &Keyword::QUOTED_IDENTIFIER && self.options.dialect.is_postgresql()
                 {
-                    self.add_error(
+                    self.err(
                         "quoted identifiers not supported by postgresql",
                         &self.span.span(),
                     );
@@ -278,7 +280,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 if !v.chars().all(|c| c.is_ascii_uppercase())
                     && self.options.warn_none_capital_keywords
                 {
-                    self.add_warn(
+                    self.warn(
                         format!(
                             "keyword {} should be in ALL CAPS {}",
                             v,
@@ -371,7 +373,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             Token::Integer(v) => {
                 let v = match v.parse() {
                     Ok(v) => v,
-                    Err(_) => self.error("integer outside range").unwrap_or_default(),
+                    Err(_) => self.err_here("integer outside range").unwrap_or_default(),
                 };
                 let span = self.span.clone();
                 self.next();
@@ -388,7 +390,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             Token::Float(v) => {
                 let v = match v.parse() {
                     Ok(v) => v,
-                    Err(_) => self.error("float outside range").unwrap_or_default(),
+                    Err(_) => self.err_here("float outside range").unwrap_or_default(),
                 };
                 let span = self.span.clone();
                 self.next();
@@ -398,19 +400,19 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    pub(crate) fn error<T>(&mut self, message: impl Into<String>) -> Result<T, ParseError> {
-        self.add_error(message, &self.span.span());
+    pub(crate) fn err_here<T>(
+        &mut self,
+        message: impl Into<Cow<'static, str>>,
+    ) -> Result<T, ParseError> {
+        self.err(message, &self.span.span());
         Err(ParseError::Unrecovered)
     }
 
     pub(crate) fn ice<T>(&mut self, file: &'static str, line: u32) -> Result<T, ParseError> {
-        self.error(format!("Internal compiler error at {}:{}", file, line))
+        self.err_here(format!("Internal compiler error at {}:{}", file, line))
     }
 
     pub(crate) fn todo<T>(&mut self, file: &'static str, line: u32) -> Result<T, ParseError> {
-        self.error(format!("Not yet implemented at {}:{}", file, line))
-    }
-    pub(crate) fn sql_segment(&self, span: Span) -> &'a str {
-        self.lexer.s(span)
+        self.err_here(format!("Not yet implemented at {}:{}", file, line))
     }
 }

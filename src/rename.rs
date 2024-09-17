@@ -26,14 +26,14 @@ impl<'a> Spanned for TableToTable<'a> {
 
 /// Represent a rename table statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, RenameTable, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, RenameTable, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "RENAME TABLE `t1` TO `t2`;";
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty(), "Issues: {:#?}", issues);
+/// # assert!(issues.is_ok(), "Issues: {}", issues);
 /// #
 /// let rename_table: RenameTable = match stmts.pop() {
 ///     Some(Statement::RenameTable(c)) => c,

@@ -42,16 +42,14 @@ impl Spanned for DeleteFlag {
 
 /// Represent a delete statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, Delete, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, Delete, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DELETE FROM t1 WHERE c1 IN (SELECT b.c1 FROM t1 b WHERE b.c2=0);";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let delete: Delete = match stmts.pop() {
 ///     Some(Statement::Delete(d)) => d,
 ///     _ => panic!("We should get a delete statement")
@@ -64,7 +62,7 @@ impl Spanned for DeleteFlag {
 ///
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
+/// # assert!(issues.is_ok());
 /// ```
 #[derive(Clone, Debug)]
 pub struct Delete<'a> {
@@ -147,7 +145,7 @@ pub(crate) fn parse_delete<'a>(parser: &mut Parser<'a, '_>) -> Result<Delete<'a>
 
     if let Some(using_span) = parser.skip_keyword(Keyword::USING) {
         if !using.is_empty() {
-            parser.add_error(
+            parser.err(
                 "Using not allowed in delete with table names before FROM",
                 &using_span,
             );

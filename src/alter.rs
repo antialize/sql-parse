@@ -521,7 +521,7 @@ fn parse_add_alter_specification<'a>(
 
             if let Some(s) = &if_not_exists_span {
                 if parser.options.dialect.is_maria() {
-                    parser.add_error("IF NOT EXIST is not supported", s);
+                    parser.err("IF NOT EXIST is not supported", s);
                 }
             }
 
@@ -540,18 +540,17 @@ fn parse_add_alter_specification<'a>(
 
 /// Represent an alter table statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, AlterTable, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, AlterTable, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "ALTER TABLE `t1`
 ///     MODIFY `id` int(11) NOT NULL AUTO_INCREMENT,
 ///     ADD CONSTRAINT `t1_t2` FOREIGN KEY (`two`) REFERENCES `t2` (`id`);";
 ///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let alter: AlterTable = match stmts.pop() {
 ///     Some(Statement::AlterTable(a)) => a,
 ///     _ => panic!("We should get an alter table statement")

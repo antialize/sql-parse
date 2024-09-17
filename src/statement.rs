@@ -699,7 +699,7 @@ pub(crate) fn parse_statements<'a>(parser: &mut Parser<'a, '_>) -> Vec<Statement
             let t = parser.token.clone();
 
             if !matches!(t, Token::DoubleDollar | Token::SemiColon) {
-                parser.add_warn("Unknown delimiter", &parser.span.span());
+                parser.warn("Unknown delimiter", &parser.span.span());
             }
             parser.delimiter = t;
             parser.next();

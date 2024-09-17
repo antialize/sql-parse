@@ -331,7 +331,7 @@ pub(crate) fn parse_table_reference_inner<'a>(
             }
 
             if !index_hints.is_empty() && !parser.options.dialect.is_maria() {
-                parser.add_error(
+                parser.err(
                     "Index hints only supported by MariaDb",
                     &index_hints.opt_span().unwrap(),
                 );
@@ -572,15 +572,14 @@ impl<'a> Spanned for Locking<'a> {
 /// Representation of select Statement
 ///
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Select, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Select, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "SELECT f1,f2 FROM t1 WHERE f3<=10 AND f4='y'";
+/// let mut issues = Issues::new(sql);
 /// let stmt = parse_statement(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let s: Select = match stmt {
 ///     Some(Statement::Select(s)) => s,
 ///     _ => panic!("We should get an select statement")
@@ -591,8 +590,7 @@ impl<'a> Spanned for Locking<'a> {
 /// let sql = "SELECT CAST(NULL AS CHAR)";
 /// let stmt = parse_statement(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let s: Select = match stmt {
 ///     Some(Statement::Select(s)) => s,
 ///     _ => panic!("We should get an select statement")
@@ -603,8 +601,7 @@ impl<'a> Spanned for Locking<'a> {
 /// let sql = "SELECT * FROM t1, d2.t2 FOR SHARE OF t1, t2 NOWAIT";
 /// let stmt = parse_statement(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let s: Select = match stmt {
 ///     Some(Statement::Select(s)) => s,
 ///     _ => panic!("We should get an select statement")
@@ -828,7 +825,7 @@ pub(crate) fn parse_select<'a>(parser: &mut Parser<'a, '_>) -> Result<Select<'a>
 
         if let LockStrength::NoKeyUpdate(s) | LockStrength::KeyShare(s) = &strength {
             if !parser.options.dialect.is_postgresql() {
-                parser.add_error("Only support by PostgreSQL", s);
+                parser.err("Only support by PostgreSQL", s);
             }
         }
 

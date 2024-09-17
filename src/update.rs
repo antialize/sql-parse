@@ -42,15 +42,14 @@ impl Spanned for UpdateFlag {
 /// Representation of replace Statement
 ///
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Update, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, Update, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "UPDATE tab1, tab2 SET tab1.column1 = value1, tab1.column2 = value2 WHERE tab1.id = tab2.id";
+/// let mut issues = Issues::new(sql);
 /// let stmt = parse_statement(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let u: Update = match stmt {
 ///     Some(Statement::Update(u)) => u,
 ///     _ => panic!("We should get an update statement")
