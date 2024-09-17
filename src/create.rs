@@ -603,10 +603,6 @@ fn parse_create_function<'a>(
                 _ => None,
             };
 
-            if parser.options.dialect.is_maria() && direction.is_none() {
-                parser.expected_error("'IN', 'OUT' or 'INOUT'");
-            }
-
             let name = parser.consume_plain_identifier()?;
             let type_ = parse_data_type(parser, false)?;
             params.push((direction, name, type_));
