@@ -10,6 +10,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::borrow::Borrow;
+
 use crate::{Span, Spanned};
 
 /// Simple identifier in code
@@ -20,6 +22,37 @@ pub struct Identifier<'a> {
     pub value: &'a str,
     /// Span of the value
     pub span: Span,
+}
+
+impl<'a> PartialEq for Identifier<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+impl<'a> Eq for Identifier<'a> {}
+
+impl<'a> PartialOrd for Identifier<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a> Ord for Identifier<'a> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.value.cmp(other.value)
+    }
+}
+
+impl<'a> alloc::fmt::Display for Identifier<'a> {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
+        self.value.fmt(f)
+    }
+}
+
+impl<'a> Borrow<str> for Identifier<'a> {
+    fn borrow(&self) -> &str {
+        self.value
+    }
 }
 
 impl<'a> Identifier<'a> {
