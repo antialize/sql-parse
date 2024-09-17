@@ -237,6 +237,25 @@ fn parse_if<'a>(parser: &mut Parser<'a, '_>) -> Result<If<'a>, ParseError> {
     })
 }
 
+/// Return statement
+#[derive(Clone, Debug)]
+pub struct Return<'a> {
+    /// Span of "Return"
+    pub return_span: Span,
+    pub expr: Expression<'a>,
+}
+
+impl<'a> Spanned for Return<'a> {
+    fn span(&self) -> Span {
+        self.return_span.join_span(&self.expr)
+    }
+}
+
+fn parse_return<'a>(parser: &mut Parser<'a, '_>) -> Result<Return<'a>, ParseError> {
+    let return_span = parser.consume_keyword(Keyword::RETURN)?;
+    let expr = parse_expression(parser, false)?;
+    Ok(Return { return_span, expr })
+}
 /// SQL statement
 #[derive(Clone, Debug)]
 pub enum Statement<'a> {
@@ -277,6 +296,7 @@ pub enum Statement<'a> {
     TruncateTable(TruncateTable<'a>),
     RenameTable(RenameTable<'a>),
     WithQuery(WithQuery<'a>),
+    Return(Return<'a>),
 }
 
 impl<'a> Spanned for Statement<'a> {
@@ -318,6 +338,7 @@ impl<'a> Spanned for Statement<'a> {
             Statement::TruncateTable(v) => v.span(),
             Statement::RenameTable(v) => v.span(),
             Statement::WithQuery(v) => v.span(),
+            Statement::Return(v) => v.span(),
         }
     }
 }
@@ -355,6 +376,7 @@ pub(crate) fn parse_statement<'a>(
         Token::Ident(_, Keyword::START) => Some(parse_start(parser)?),
         Token::Ident(_, Keyword::COMMIT) => Some(Statement::Commit(parse_commit(parser)?)),
         Token::Ident(_, Keyword::IF) => Some(Statement::If(parse_if(parser)?)),
+        Token::Ident(_, Keyword::RETURN) => Some(Statement::Return(parse_return(parser)?)),
         Token::Ident(_, Keyword::ALTER) => Some(parse_alter(parser)?),
         Token::Ident(_, Keyword::CASE) => Some(Statement::Case(parse_case_statement(parser)?)),
         Token::Ident(_, Keyword::COPY) => Some(Statement::Copy(parse_copy_statement(parser)?)),
