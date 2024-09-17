@@ -5,7 +5,7 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     statement::parse_statement,
-    Identifier, Issue, Span, Spanned, Statement,
+    Identifier, Span, Spanned, Statement,
 };
 
 #[derive(Clone, Debug)]
@@ -35,16 +35,15 @@ impl<'a> Spanned for WithBlock<'a> {
 
 /// Represent a with query statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, WithQuery, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, WithQuery, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "WITH ids AS (DELETE FROM things WHERE number=42) INSERT INTO deleted (id) SELECT id FROM ids;";
-///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
+/// # 
 /// let delete: WithQuery = match stmts.pop() {
 ///     Some(Statement::WithQuery(d)) => d,
 ///     _ => panic!("We should get a with statement")
@@ -101,7 +100,7 @@ pub(crate) fn parse_with_query<'a>(
                         | Statement::Update(_)
                         | Statement::Delete(_)
                 ) {
-                    parser.add_error(
+                    parser.err(
                         "Only SELECT, INSERT, UPDATE or DELETE allowed within WITH query",
                         &v.span(),
                     );
@@ -131,7 +130,7 @@ pub(crate) fn parse_with_query<'a>(
                     | Statement::Update(_)
                     | Statement::Delete(_)
             ) {
-                parser.add_error(
+                parser.err(
                     "Only SELECT, INSERT, UPDATE or DELETE allowed as WITH query",
                     &v.span(),
                 );
@@ -146,7 +145,7 @@ pub(crate) fn parse_with_query<'a>(
         statement,
     };
     if !parser.options.dialect.is_postgresql() {
-        parser.add_error("WITH statements only supported by postgresql", &res.span());
+        parser.err("WITH statements only supported by postgresql", &res.span());
     }
     Ok(res)
 }

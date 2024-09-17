@@ -736,7 +736,7 @@ fn parse_function<'a>(
         Token::Ident(_, Keyword::JSON_VALUE) => Function::JsonValue,
         Token::Ident(v, k) if !k.reserved() => Function::Other(v),
         _ => {
-            parser.add_error("Unknown function", &span);
+            parser.err("Unknown function", &span);
             Function::Unknown
         }
     };
@@ -972,11 +972,11 @@ pub(crate) fn parse_expression<'a>(
             }
             Token::Ident(_, Keyword::IN) if !inner => {
                 if let Err(e) = r.reduce(IN_PRIORITY) {
-                    parser.error(e)?;
+                    parser.err_here(e)?;
                 }
                 let lhs = match r.stack.pop() {
                     Some(ReduceMember::Expression(e)) => e,
-                    _ => parser.error("Expected expression before here 3")?,
+                    _ => parser.err_here("Expected expression before here 3")?,
                 };
                 let op = parser.consume_keyword(Keyword::IN)?;
                 parser.consume_token(Token::LParen)?;
@@ -1004,11 +1004,11 @@ pub(crate) fn parse_expression<'a>(
             }
             Token::Ident(_, Keyword::IS) if !inner => {
                 if let Err(e) = r.reduce(IN_PRIORITY) {
-                    parser.error(e)?;
+                    parser.err_here(e)?;
                 }
                 let lhs = match r.stack.pop() {
                     Some(ReduceMember::Expression(e)) => e,
-                    _ => parser.error("Expected expression before here 4")?,
+                    _ => parser.err_here("Expected expression before here 4")?,
                 };
                 let op = parser.consume_keyword(Keyword::IS)?;
                 let (is, op) = match &parser.token {
@@ -1049,11 +1049,11 @@ pub(crate) fn parse_expression<'a>(
                 if !inner && matches!(r.stack.last(), Some(ReduceMember::Expression(_))) =>
             {
                 if let Err(e) = r.reduce(IN_PRIORITY) {
-                    parser.error(e)?;
+                    parser.err_here(e)?;
                 }
                 let lhs = match r.stack.pop() {
                     Some(ReduceMember::Expression(e)) => e,
-                    _ => parser.error("Expected expression before here 2")?,
+                    _ => parser.err_here("Expected expression before here 2")?,
                 };
                 let op = parser.consume_keyword(Keyword::NOT)?;
                 match &parser.token {
@@ -1333,11 +1333,11 @@ pub(crate) fn parse_expression<'a>(
             _ => break,
         };
         if let Err(e) = e {
-            parser.error(e.to_string())?;
+            parser.err_here(e.to_string())?;
         }
     }
     if r.reduce(99999).is_err() {
-        parser.error("Expected expression")
+        parser.err_here("Expected expression")
     } else if r.stack.len() != 1 {
         parser.ice(file!(), line!())
     } else if let Some(ReduceMember::Expression(e)) = r.stack.pop() {
@@ -1378,11 +1378,11 @@ mod tests {
     use alloc::{
         format,
         string::{String, ToString},
-        vec::Vec,
     };
 
     use crate::{
         expression::{BinaryOperator, Expression},
+        issue::Issues,
         parser::Parser,
         ParseOptions, SQLDialect,
     };
@@ -1405,7 +1405,7 @@ mod tests {
     }
 
     fn test_expr(src: &'static str, f: impl FnOnce(&Expression<'_>) -> Result<(), String>) {
-        let mut issues = Vec::new();
+        let mut issues = Issues::new(src);
         let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
         let mut parser = Parser::new(src, &mut issues, &options);
         let res = parse_expression(&mut parser, false).expect("Expression in test expr");

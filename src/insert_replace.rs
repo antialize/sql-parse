@@ -18,7 +18,7 @@ use crate::{
     parser::{ParseError, Parser},
     qualified_name::parse_qualified_name,
     select::{parse_select, parse_select_expr, Select, SelectExpr},
-    Identifier, Issue, OptSpanned, QualifiedName, Span, Spanned,
+    Identifier, OptSpanned, QualifiedName, Span, Spanned,
 };
 
 /// Flags for insert
@@ -161,20 +161,23 @@ impl<'a> Spanned for InsertReplaceOnDuplicateKeyUpdate<'a> {
 /// Representation of Insert or Replace Statement
 ///
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, InsertReplace, InsertReplaceType, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, InsertReplace, InsertReplaceType, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql1 = "INSERT INTO person (first_name, last_name) VALUES ('John', 'Doe')";
+/// # let mut issues = Issues::new(sql1);
 /// let stmt1 = parse_statement(sql1, &mut issues, &options);
+/// # assert!(issues.is_ok());/// #
 /// let sql2 = "INSERT INTO contractor SELECT * FROM person WHERE status = 'c'";
+/// # let mut issues = Issues::new(sql2);
 /// let stmt2 = parse_statement(sql2, &mut issues, &options);
+/// # assert!(issues.is_ok());/// #
 /// let sql3 = "INSERT INTO account (`key`, `value`) VALUES ('foo', 42)
 ///             ON DUPLICATE KEY UPDATE `value`=`value`+42";
+/// # let mut issues = Issues::new(sql3);
 /// let stmt3 = parse_statement(sql3, &mut issues, &options);
+/// # assert!(issues.is_ok());
 ///
-/// # assert!(issues.is_empty());
-/// #
 /// let i: InsertReplace = match stmt1 {
 ///     Some(Statement::InsertReplace(
 ///         i @ InsertReplace{type_: InsertReplaceType::Insert(_), ..})) => i,
@@ -186,9 +189,9 @@ impl<'a> Spanned for InsertReplaceOnDuplicateKeyUpdate<'a> {
 ///
 ///
 /// let sql = "REPLACE INTO t2 VALUES (1,'Leopard'),(2,'Dog')";
+/// # let mut issues = Issues::new(sql);
 /// let stmt = parse_statement(sql, &mut issues, &options);
-///
-/// # assert!(issues.is_empty());
+/// # assert!(issues.is_ok());
 /// #
 /// let r: InsertReplace = match stmt {
 ///     Some(Statement::InsertReplace(
@@ -202,18 +205,16 @@ impl<'a> Spanned for InsertReplaceOnDuplicateKeyUpdate<'a> {
 ///
 /// PostgreSQL
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, InsertReplace, InsertReplaceType, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statement, InsertReplace, InsertReplaceType, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL).arguments(SQLArguments::Dollar);
-/// # let mut issues = Vec::new();
 /// #
 ///
 /// let sql4 = "INSERT INTO contractor SELECT * FROM person WHERE status = $1 ON CONFLICT (name) DO NOTHING";
+/// # let mut issues = Issues::new(sql4);
 /// let stmt4 = parse_statement(sql4, &mut issues, &options);
 ///
-/// for issue in &issues {
-///     println!("{:#?}", issue);
-/// }
-/// # assert!(issues.is_empty());
+/// println!("{}", issues);
+/// # assert!(issues.is_ok());
 /// ```
 #[derive(Clone, Debug)]
 pub struct InsertReplace<'a> {
@@ -291,13 +292,13 @@ pub(crate) fn parse_insert_replace<'a>(
             InsertReplaceFlag::LowPriority(_) => {}
             InsertReplaceFlag::HighPriority(s) => {
                 if !insert {
-                    parser.add_error("Not supported for replace", s);
+                    parser.err("Not supported for replace", s);
                 }
             }
             InsertReplaceFlag::Delayed(_) => {}
             InsertReplaceFlag::Ignore(s) => {
                 if !insert {
-                    parser.add_error("Not supported for replace", s);
+                    parser.err("Not supported for replace", s);
                 }
             }
         }
@@ -368,18 +369,9 @@ pub(crate) fn parse_insert_replace<'a>(
                 }
             }
             if let Some(cs) = columns.opt_span() {
-                parser.issues.push(
-                    Issue::err(
-                        "Columns may not be used here",
-                        &cs,
-                        &parser.sql_segment(cs.span()),
-                    )
-                    .frag(
-                        "Together with SET",
-                        &set_span,
-                        &parser.sql_segment(set_span.span()),
-                    ),
-                );
+                parser
+                    .err("Columns may not be used here", &cs)
+                    .frag("Together with SET", &set_span);
             }
             set = Some(InsertReplaceSet { set_span, pairs });
         }
@@ -414,7 +406,7 @@ pub(crate) fn parse_insert_replace<'a>(
                         }
                     }
                     if !parser.options.dialect.is_maria() {
-                        parser.add_error(
+                        parser.err(
                             "Only support by mariadb",
                             &on_duplicate_key_update_span.join_span(&pairs),
                         );
@@ -494,7 +486,7 @@ pub(crate) fn parse_insert_replace<'a>(
                     };
 
                     if !parser.options.dialect.is_postgresql() {
-                        parser.add_error("Only support by postgesql", &on_conflict);
+                        parser.err("Only support by postgesql", &on_conflict);
                     }
 
                     (None, Some(on_conflict))

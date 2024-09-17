@@ -18,9 +18,8 @@ use crate::{
     lexer::Token,
     parser::{ParseError, Parser},
     qualified_name::parse_qualified_name,
-    select::{parse_select, Select},
-    statement::parse_statement,
-    DataType, Expression, Identifier, Issue, QualifiedName, SString, Span, Spanned, Statement,
+    statement::{parse_compound_query, parse_statement},
+    DataType, Expression, Identifier, QualifiedName, SString, Span, Spanned, Statement,
 };
 
 /// Options on created table
@@ -246,10 +245,8 @@ impl<'a> Spanned for CreateOption<'a> {
 
 /// Represent a create table statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTable, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTable, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
-/// #
 /// let sql = "CREATE TABLE `parts` (
 ///         `id` int(11) NOT NULL COMMENT 'THIS IS THE ID FIELD',
 ///         `hash` varchar(64) COLLATE utf8_bin NOT NULL,
@@ -258,10 +255,10 @@ impl<'a> Spanned for CreateOption<'a> {
 ///         `success` tinyint(1) NOT NULL
 ///     ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;";
 ///
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let create: CreateTable = match stmts.pop() {
 ///     Some(Statement::CreateTable(c)) => c,
 ///     _ => panic!("We should get an create table statement")
@@ -303,9 +300,8 @@ impl<'a> Spanned for CreateTable<'a> {
 
 /// Represent a create view statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateView, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateView, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "CREATE ALGORITHM=UNDEFINED DEFINER=`phpmyadmin`@`localhost` SQL SECURITY DEFINER
 ///    VIEW `v1`
@@ -314,10 +310,10 @@ impl<'a> Spanned for CreateTable<'a> {
 ///         `t1`.`c1` AS `c1`,
 ///         (SELECT `t2`.`c2` FROM `t2` WHERE `t2`.`id` = `t1`.`c3`) AS `c2`
 ///         FROM `t1` WHERE `t1`.`deleted` IS NULL;";
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert!(issues.is_empty());
-/// #
+/// # assert!(issues.is_ok());
 /// let create: CreateView = match stmts.pop() {
 ///     Some(Statement::CreateView(c)) => c,
 ///     _ => panic!("We should get an create view statement")
@@ -342,7 +338,7 @@ pub struct CreateView<'a> {
     /// Span of "AS"
     pub as_span: Span,
     /// The select statement following "AS"
-    pub select: Select<'a>,
+    pub select: Box<Statement<'a>>,
 }
 
 impl<'a> Spanned for CreateView<'a> {
@@ -434,7 +430,7 @@ fn parse_create_view<'a>(
 
     let as_span = parser.consume_keyword(Keyword::AS)?;
 
-    let select = parse_select(parser)?;
+    let select = parse_compound_query(parser)?;
 
     // TODO [WITH [CASCADED | LOCAL] CHECK OPTION]
 
@@ -445,7 +441,7 @@ fn parse_create_view<'a>(
         if_not_exists,
         name,
         as_span,
-        select,
+        select: Box::new(select),
     }))
 }
 
@@ -506,9 +502,8 @@ impl Spanned for FunctionParamDirection {
 /// This is not fully implemented yet
 ///
 /// ```ignore
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateFunction, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateFunction, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DELIMITER $$
 /// CREATE FUNCTION add_func3(IN a INT, IN b INT, OUT c INT) RETURNS INT
@@ -518,6 +513,7 @@ impl Spanned for FunctionParamDirection {
 /// END;
 /// $$
 /// DELIMITER ;";
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
 /// assert!(issues.is_empty());
@@ -606,10 +602,6 @@ fn parse_create_function<'a>(
                 )),
                 _ => None,
             };
-
-            if parser.options.dialect.is_maria() && direction.is_none() {
-                parser.expected_error("'IN', 'OUT' or 'INOUT'");
-            }
 
             let name = parser.consume_plain_identifier()?;
             let type_ = parse_data_type(parser, false)?;
@@ -762,9 +754,8 @@ impl Spanned for TriggerEvent {
 
 /// Represent a create trigger statement
 /// ```
-/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTrigger, Statement};
+/// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, CreateTrigger, Statement, Issues};
 /// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// # let mut issues = Vec::new();
 /// #
 /// let sql = "DROP TRIGGER IF EXISTS `my_trigger`;
 /// DELIMITER $$
@@ -779,9 +770,10 @@ impl Spanned for TriggerEvent {
 /// END
 /// $$
 /// DELIMITER ;";
+/// let mut issues = Issues::new(sql);
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
-/// # assert_eq!(&issues, &[]);
+/// # assert_eq!(issues.get(), &[]);
 /// #
 /// let create: CreateTrigger = match stmts.pop() {
 ///     Some(Statement::CreateTrigger(c)) => c,
@@ -940,7 +932,7 @@ fn parse_create_type<'a>(
 ) -> Result<Statement<'a>, ParseError> {
     let type_span = parser.consume_keyword(Keyword::TYPE)?;
     if !parser.options.dialect.is_postgresql() {
-        parser.add_error("CREATE TYPE only supported by postgresql", &type_span);
+        parser.err("CREATE TYPE only supported by postgresql", &type_span);
     }
     let name = parser.consume_plain_identifier()?;
     let as_enum_span = parser.consume_keywords(&[Keyword::AS, Keyword::ENUM])?;
@@ -1049,7 +1041,7 @@ fn parse_create_index<'a>(
     if let Some(where_span) = parser.skip_keyword(Keyword::WHERE) {
         let where_expr = parse_expression(parser, false)?;
         if parser.options.dialect.is_maria() {
-            parser.add_error(
+            parser.err(
                 "Partial indexes not supported",
                 &where_span.join_span(&where_expr),
             );
