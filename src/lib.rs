@@ -76,7 +76,7 @@ pub use sstring::SString;
 pub use statement::{Statement, Union, UnionType, UnionWith};
 
 pub use alter::{
-    AlterSpecification, AlterTable, ForeignKeyOn, ForeignKeyOnAction, ForeignKeyOnType, IndexCol,
+    AlterSpecification, AlterTable, ForeignKeyOn, ForeignKeyOnAction, ForeignKeyOnType, IndexCol, AlterColumnAction,
     IndexOption, IndexType,
 };
 pub use create::{
