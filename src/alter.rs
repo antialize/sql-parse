@@ -13,11 +13,12 @@ use alloc::vec::Vec;
 // limitations under the License.
 use crate::{
     data_type::parse_data_type,
+    expression::parse_expression,
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
     qualified_name::parse_qualified_name,
-    DataType, Identifier, QualifiedName, SString, Span, Spanned, Statement,
+    DataType, Expression, Identifier, QualifiedName, SString, Span, Spanned, Statement,
 };
 
 /// Option on an index
@@ -132,6 +133,43 @@ impl<'a> Spanned for IndexCol<'a> {
     }
 }
 
+/// Enum of alterations to perform on a column
+#[derive(Clone, Debug)]
+pub enum AlterColumnAction<'a> {
+    SetDefault {
+        set_default_span: Span,
+        value: Expression<'a>,
+    },
+    DropDefault {
+        drop_default_span: Span,
+    },
+    Type {
+        type_span: Span,
+        type_: DataType<'a>,
+    },
+    SetNotNull {
+        set_not_null_span: Span,
+    },
+    DropNotNull {
+        drop_not_null_span: Span,
+    },
+}
+
+impl<'a> Spanned for AlterColumnAction<'a> {
+    fn span(&self) -> Span {
+        match self {
+            AlterColumnAction::SetDefault {
+                set_default_span,
+                value,
+            } => set_default_span.join_span(value),
+            AlterColumnAction::DropDefault { drop_default_span } => drop_default_span.clone(),
+            AlterColumnAction::Type { type_span, type_ } => type_span.join_span(type_),
+            AlterColumnAction::SetNotNull { set_not_null_span } => set_not_null_span.clone(),
+            AlterColumnAction::DropNotNull { drop_not_null_span } => drop_not_null_span.clone(),
+        }
+    }
+}
+
 /// Enum of alterations to perform on a table
 #[derive(Clone, Debug)]
 pub enum AlterSpecification<'a> {
@@ -183,7 +221,7 @@ pub enum AlterSpecification<'a> {
     },
     /// Modify a column
     Modify {
-        // Span of "MODIFY"
+        /// Span of "MODIFY"
         modify_span: Span,
         /// Span of "IF EXISTS" if specified
         if_exists: Option<Span>,
@@ -191,6 +229,21 @@ pub enum AlterSpecification<'a> {
         col: Identifier<'a>,
         /// New definition of column
         definition: DataType<'a>,
+    },
+    DropColumn {
+        /// Span of "DROP COLUMN"
+        drop_column_span: Span,
+        /// Name of column to drop
+        column: Identifier<'a>,
+        /// Span of "CASCADE" if specified
+        cascade: Option<Span>,
+    },
+    AlterColumn {
+        /// Span of "ALTER COLUMN"
+        alter_column_span: Span,
+        /// Name of column to drop
+        column: Identifier<'a>,
+        alter_column_action: AlterColumnAction<'a>,
     },
     /// Modify a column
     OwnerTo {
@@ -259,6 +312,18 @@ impl<'a> Spanned for AlterSpecification<'a> {
                 .join_span(col)
                 .join_span(definition),
             AlterSpecification::OwnerTo { span, owner } => span.join_span(owner),
+            AlterSpecification::DropColumn {
+                drop_column_span,
+                column: col,
+                cascade,
+            } => drop_column_span.join_span(col).join_span(cascade),
+            AlterSpecification::AlterColumn {
+                alter_column_span,
+                column: col,
+                alter_column_action,
+            } => alter_column_span
+                .join_span(col)
+                .join_span(alter_column_action),
         }
     }
 }
@@ -541,8 +606,8 @@ fn parse_add_alter_specification<'a>(
 /// Represent an alter table statement
 /// ```
 /// # use sql_parse::{SQLDialect, SQLArguments, ParseOptions, parse_statements, AlterTable, Statement, Issues};
-/// # let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
-/// #
+/// let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+///
 /// let sql = "ALTER TABLE `t1`
 ///     MODIFY `id` int(11) NOT NULL AUTO_INCREMENT,
 ///     ADD CONSTRAINT `t1_t2` FOREIGN KEY (`two`) REFERENCES `t2` (`id`);";
@@ -557,7 +622,24 @@ fn parse_add_alter_specification<'a>(
 /// };
 ///
 /// assert!(alter.table.identifier.as_str() == "t1");
-/// println!("{:#?}", alter.alter_specifications)
+/// println!("{:#?}", alter.alter_specifications);
+///
+/// let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL);
+/// let sql = "ALTER TABLE t1
+///     ALTER COLUMN id DROP NOT NULL,
+///     ALTER COLUMN id SET NOT NULL,
+///     ALTER COLUMN id SET DEFAULT 47,
+///     ALTER COLUMN id DROP DEFAULT,
+///     ALTER COLUMN id TYPE int;";
+///
+/// let mut issues = Issues::new(sql);
+/// let mut stmts = parse_statements(sql, &mut issues, &options);
+///
+/// # assert!(issues.is_ok());
+/// let alter: AlterTable = match stmts.pop() {
+///     Some(Statement::AlterTable(a)) => a,
+///     _ => panic!("We should get an alter table statement")
+/// };
 ///
 #[derive(Clone, Debug)]
 pub struct AlterTable<'a> {
@@ -632,6 +714,73 @@ fn parse_alter_table<'a>(
                     let span = parser.consume_keywords(&[Keyword::OWNER, Keyword::TO])?;
                     let owner = parser.consume_plain_identifier()?;
                     AlterSpecification::OwnerTo { span, owner }
+                }
+                Token::Ident(_, Keyword::DROP) => {
+                    let drop_column_span =
+                        parser.consume_keywords(&[Keyword::DROP, Keyword::COLUMN])?;
+                    let column = parser.consume_plain_identifier()?;
+                    let cascade = parser.skip_keyword(Keyword::CASCADE);
+                    AlterSpecification::DropColumn {
+                        drop_column_span,
+                        column,
+                        cascade,
+                    }
+                }
+                Token::Ident(_, Keyword::ALTER) => {
+                    let span = parser.consume_keywords(&[Keyword::ALTER, Keyword::COLUMN])?;
+                    let column = parser.consume_plain_identifier()?;
+
+                    let alter_column_action = match parser.token {
+                        Token::Ident(_, Keyword::SET) => {
+                            let set_span = parser.consume();
+                            match parser.token {
+                                Token::Ident(_, Keyword::DEFAULT) => {
+                                    let set_default_span = parser.consume().join_span(&set_span);
+                                    let value = parse_expression(parser, false)?;
+                                    AlterColumnAction::SetDefault {
+                                        set_default_span,
+                                        value,
+                                    }
+                                }
+                                Token::Ident(_, Keyword::NOT) => {
+                                    let set_not_null_span = set_span.join_span(
+                                        &parser.consume_keywords(&[Keyword::NOT, Keyword::NULL])?,
+                                    );
+                                    AlterColumnAction::SetNotNull { set_not_null_span }
+                                }
+                                _ => parser.expected_failure("'DEFAULT' or 'NOT NULL'")?,
+                            }
+                        }
+                        Token::Ident(_, Keyword::DROP) => {
+                            let set_span = parser.consume();
+                            match parser.token {
+                                Token::Ident(_, Keyword::DEFAULT) => {
+                                    let drop_default_span = parser.consume().join_span(&set_span);
+                                    AlterColumnAction::DropDefault {
+                                        drop_default_span: drop_default_span,
+                                    }
+                                }
+                                Token::Ident(_, Keyword::NOT) => {
+                                    let drop_not_null_span = set_span.join_span(
+                                        &parser.consume_keywords(&[Keyword::NOT, Keyword::NULL])?,
+                                    );
+                                    AlterColumnAction::DropNotNull { drop_not_null_span }
+                                }
+                                _ => parser.expected_failure("'DEFAULT' or 'NOT NULL'")?,
+                            }
+                        }
+                        Token::Ident(_, Keyword::TYPE) => {
+                            let type_span = parser.consume();
+                            let type_ = parse_data_type(parser, false)?;
+                            AlterColumnAction::Type { type_span, type_ }
+                        }
+                        _ => parser.expected_failure("alter column action")?,
+                    };
+                    AlterSpecification::AlterColumn {
+                        alter_column_span: span,
+                        column,
+                        alter_column_action,
+                    }
                 }
                 _ => parser.expected_failure("alter specification")?,
             });
