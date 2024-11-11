@@ -68,7 +68,6 @@ impl<'a, 'b> IssueHandle<'a, 'b> {
     }
 }
 
-
 #[derive(Debug)]
 pub struct Issues<'a> {
     pub src: &'a str,

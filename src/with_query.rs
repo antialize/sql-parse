@@ -43,7 +43,7 @@ impl<'a> Spanned for WithBlock<'a> {
 /// let mut stmts = parse_statements(sql, &mut issues, &options);
 ///
 /// # assert!(issues.is_ok());
-/// # 
+/// #
 /// let delete: WithQuery = match stmts.pop() {
 ///     Some(Statement::WithQuery(d)) => d,
 ///     _ => panic!("We should get a with statement")
