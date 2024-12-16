@@ -76,8 +76,8 @@ pub use sstring::SString;
 pub use statement::{Statement, Union, UnionType, UnionWith};
 
 pub use alter::{
-    AlterSpecification, AlterTable, ForeignKeyOn, ForeignKeyOnAction, ForeignKeyOnType, IndexCol, AlterColumnAction,
-    IndexOption, IndexType,
+    AlterColumnAction, AlterSpecification, AlterTable, ForeignKeyOn, ForeignKeyOnAction,
+    ForeignKeyOnType, IndexCol, IndexOption, IndexType,
 };
 pub use create::{
     CreateAlgorithm, CreateDefinition, CreateFunction, CreateOption, CreateTable, CreateTrigger,
@@ -110,6 +110,7 @@ pub enum SQLDialect {
     /// Parse MariaDB/Mysql SQL
     MariaDB,
     PostgreSQL,
+    Sqlite,
 }
 
 impl SQLDialect {
@@ -119,6 +120,10 @@ impl SQLDialect {
 
     pub fn is_maria(&self) -> bool {
         matches!(self, SQLDialect::MariaDB)
+    }
+
+    pub fn is_sqlite(&self) -> bool {
+        matches!(self, SQLDialect::Sqlite)
     }
 }
 
