@@ -122,6 +122,9 @@ pub enum TableOption<'a> {
         identifier: Span,
         value: SString<'a>,
     },
+    Strict {
+        identifier: Span,
+    },
     //StatsAutoRecalc
     //StatsPersistance
     //StatsSamplePages
@@ -160,6 +163,7 @@ impl<'a> Spanned for TableOption<'a> {
             TableOption::SecondaryEngineAttribute { identifier, value } => {
                 identifier.span().join_span(value)
             }
+            TableOption::Strict { identifier } => identifier.span(),
         }
     }
 }
@@ -1183,6 +1187,10 @@ fn parse_create_table<'a>(
                             identifier,
                             value: parser.consume_string()?,
                         });
+                    }
+                    Token::Ident(_, Keyword::STRICT) => {
+                        parser.consume_keyword(Keyword::STRICT)?;
+                        options.push(TableOption::Strict { identifier });
                     }
                     t if t == &parser.delimiter => break,
                     Token::Eof => break,

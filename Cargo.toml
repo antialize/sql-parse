@@ -1,6 +1,6 @@
 [package]
 name = "sql-parse"
-version = "0.23.0"
+version = "0.24.0"
 edition = "2021"
 authors = ["Jakob Truelsen <antialize@gmail.com>"]
 keywords = [ "mysql", "postgresql", "sql", "lexer", "parser" ]

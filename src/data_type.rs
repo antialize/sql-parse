@@ -302,7 +302,12 @@ pub(crate) fn parse_data_type<'a>(
             (parser.consume_keyword(Keyword::FLOAT8)?, Type::Float8)
         }
         Token::Ident(_, Keyword::REAL) => {
-            (parser.consume_keyword(Keyword::FLOAT)?, Type::Float(None)) // TODO
+            let i = parser.consume_keyword(Keyword::REAL)?;
+            if parser.options.dialect.is_sqlite() {
+                (i, Type::Double(None))
+            } else {
+                (i, Type::Float(None))
+            }
         }
         Token::Ident(_, Keyword::FLOAT) => {
             (parser.consume_keyword(Keyword::FLOAT)?, Type::Float(None)) // TODO

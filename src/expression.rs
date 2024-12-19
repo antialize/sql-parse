@@ -57,6 +57,7 @@ pub enum Function<'a> {
     DateDiff,
     DateFormat,
     DateSub,
+    Datetime,
     DayName,
     DayOfMonth,
     DayOfWeek,
@@ -102,13 +103,13 @@ pub enum Function<'a> {
     JsonMergePerserve,
     JsonNormalize,
     JsonObject,
+    JsonObjectAgg,
     JsonObjectFilterKeys,
     JsonObjectToArray,
-    JsonObjectAgg,
     JsonOverlaps,
     JsonPretty,
-    JsonQuote,
     JsonQuery,
+    JsonQuote,
     JsonRemove,
     JsonReplace,
     JsonSchemaValid,
@@ -174,6 +175,7 @@ pub enum Function<'a> {
     Space,
     Sqrt,
     StrCmp,
+    Strftime,
     StrToDate,
     SubDate,
     SubStr,
@@ -734,6 +736,10 @@ fn parse_function<'a>(
         Token::Ident(_, Keyword::JSON_UNQUOTE) => Function::JsonUnquote,
         Token::Ident(_, Keyword::JSON_VALID) => Function::JsonValid,
         Token::Ident(_, Keyword::JSON_VALUE) => Function::JsonValue,
+
+        // Sqlite
+        Token::Ident(_, Keyword::STRFTIME) => Function::Strftime,
+        Token::Ident(_, Keyword::DATETIME) => Function::Datetime,
         Token::Ident(v, k) if !k.reserved() => Function::Other(v),
         _ => {
             parser.err("Unknown function", &span);
