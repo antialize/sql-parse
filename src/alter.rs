@@ -34,7 +34,7 @@ pub enum IndexOption<'a> {
     Comment(SString<'a>),
 }
 
-impl<'a> Spanned for IndexOption<'a> {
+impl Spanned for IndexOption<'_> {
     fn span(&self) -> Span {
         match &self {
             IndexOption::IndexTypeBTree(v) => v.span(),
@@ -127,7 +127,7 @@ pub struct IndexCol<'a> {
     pub size: Option<(u32, Span)>,
 }
 
-impl<'a> Spanned for IndexCol<'a> {
+impl Spanned for IndexCol<'_> {
     fn span(&self) -> Span {
         self.name.join_span(&self.size)
     }
@@ -155,7 +155,7 @@ pub enum AlterColumnAction<'a> {
     },
 }
 
-impl<'a> Spanned for AlterColumnAction<'a> {
+impl Spanned for AlterColumnAction<'_> {
     fn span(&self) -> Span {
         match self {
             AlterColumnAction::SetDefault {
@@ -254,7 +254,7 @@ pub enum AlterSpecification<'a> {
     },
 }
 
-impl<'a> Spanned for AlterSpecification<'a> {
+impl Spanned for AlterSpecification<'_> {
     fn span(&self) -> Span {
         match &self {
             AlterSpecification::AddColumn {
@@ -659,7 +659,7 @@ pub struct AlterTable<'a> {
     pub alter_specifications: Vec<AlterSpecification<'a>>,
 }
 
-impl<'a> Spanned for AlterTable<'a> {
+impl Spanned for AlterTable<'_> {
     fn span(&self) -> Span {
         self.alter_span
             .join_span(&self.online)
@@ -757,7 +757,7 @@ fn parse_alter_table<'a>(
                                 Token::Ident(_, Keyword::DEFAULT) => {
                                     let drop_default_span = parser.consume().join_span(&set_span);
                                     AlterColumnAction::DropDefault {
-                                        drop_default_span: drop_default_span,
+                                        drop_default_span,
                                     }
                                 }
                                 Token::Ident(_, Keyword::NOT) => {

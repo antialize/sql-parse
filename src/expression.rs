@@ -279,7 +279,7 @@ pub enum IdentifierPart<'a> {
     Star(Span),
 }
 
-impl<'a> Spanned for IdentifierPart<'a> {
+impl Spanned for IdentifierPart<'_> {
     fn span(&self) -> Span {
         match &self {
             IdentifierPart::Name(v) => v.span(),
@@ -301,7 +301,7 @@ pub struct When<'a> {
     pub then: Expression<'a>,
 }
 
-impl<'a> Spanned for When<'a> {
+impl Spanned for When<'_> {
     fn span(&self) -> Span {
         self.when_span
             .join_span(&self.when)
@@ -317,7 +317,7 @@ pub struct WindowSpec<'a> {
     pub order_by: (Span, Vec<(Expression<'a>, OrderFlag)>),
 }
 
-impl<'a> Spanned for WindowSpec<'a> {
+impl Spanned for WindowSpec<'_> {
     fn span(&self) -> Span {
         self.order_by.span()
     }
@@ -449,7 +449,7 @@ pub enum Expression<'a> {
     },
 }
 
-impl<'a> Spanned for Expression<'a> {
+impl Spanned for Expression<'_> {
     fn span(&self) -> Span {
         match &self {
             Expression::Binary {

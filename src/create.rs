@@ -132,7 +132,7 @@ pub enum TableOption<'a> {
     //UNION
 }
 
-impl<'a> Spanned for TableOption<'a> {
+impl Spanned for TableOption<'_> {
     fn span(&self) -> Span {
         match &self {
             TableOption::AutoExtendSize { identifier, value } => identifier.span().join_span(value),
@@ -183,7 +183,7 @@ pub enum CreateDefinition<'a> {
     },
 }
 
-impl<'a> Spanned for CreateDefinition<'a> {
+impl Spanned for CreateDefinition<'_> {
     fn span(&self) -> Span {
         match &self {
             CreateDefinition::ColumnDefinition {
@@ -229,7 +229,7 @@ pub enum CreateOption<'a> {
     SqlSecurityDefiner(Span, Span),
     SqlSecurityUser(Span, Span),
 }
-impl<'a> Spanned for CreateOption<'a> {
+impl Spanned for CreateOption<'_> {
     fn span(&self) -> Span {
         match &self {
             CreateOption::OrReplace(v) => v.span(),
@@ -290,7 +290,7 @@ pub struct CreateTable<'a> {
     pub options: Vec<TableOption<'a>>,
 }
 
-impl<'a> Spanned for CreateTable<'a> {
+impl Spanned for CreateTable<'_> {
     fn span(&self) -> Span {
         self.create_span
             .join_span(&self.create_options)
@@ -345,7 +345,7 @@ pub struct CreateView<'a> {
     pub select: Box<Statement<'a>>,
 }
 
-impl<'a> Spanned for CreateView<'a> {
+impl Spanned for CreateView<'_> {
     fn span(&self) -> Span {
         self.create_span
             .join_span(&self.create_options)
@@ -465,7 +465,7 @@ pub enum FunctionCharacteristic<'a> {
     Comment(SString<'a>),
 }
 
-impl<'a> Spanned for FunctionCharacteristic<'a> {
+impl Spanned for FunctionCharacteristic<'_> {
     fn span(&self) -> Span {
         match &self {
             FunctionCharacteristic::LanguageSql(v) => v.span(),
@@ -554,7 +554,7 @@ pub struct CreateFunction<'a> {
     pub return_: Option<Box<Statement<'a>>>,
 }
 
-impl<'a> Spanned for CreateFunction<'a> {
+impl Spanned for CreateFunction<'_> {
     fn span(&self) -> Span {
         self.create_span
             .join_span(&self.create_options)
@@ -813,7 +813,7 @@ pub struct CreateTrigger<'a> {
     pub statement: Box<Statement<'a>>,
 }
 
-impl<'a> Spanned for CreateTrigger<'a> {
+impl Spanned for CreateTrigger<'_> {
     fn span(&self) -> Span {
         self.create_span
             .join_span(&self.create_options)
@@ -918,7 +918,7 @@ pub struct CreateTypeEnum<'a> {
     pub values: Vec<SString<'a>>,
 }
 
-impl<'a> Spanned for CreateTypeEnum<'a> {
+impl Spanned for CreateTypeEnum<'_> {
     fn span(&self) -> Span {
         self.create_span
             .join_span(&self.create_options)
@@ -996,7 +996,7 @@ pub struct CreateIndex<'a> {
     pub where_: Option<(Span, Expression<'a>)>,
 }
 
-impl<'a> Spanned for CreateIndex<'a> {
+impl Spanned for CreateIndex<'_> {
     fn span(&self) -> Span {
         self.create_span
             .join_span(&self.create_options)

@@ -35,7 +35,7 @@ impl<'a> SString<'a> {
     }
 }
 
-impl<'a> core::ops::Deref for SString<'a> {
+impl core::ops::Deref for SString<'_> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -43,7 +43,7 @@ impl<'a> core::ops::Deref for SString<'a> {
     }
 }
 
-impl<'a> Spanned for SString<'a> {
+impl Spanned for SString<'_> {
     fn span(&self) -> Span {
         self.span.span()
     }

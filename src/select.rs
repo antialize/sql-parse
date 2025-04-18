@@ -32,7 +32,7 @@ pub struct SelectExpr<'a> {
     pub as_: Option<Identifier<'a>>,
 }
 
-impl<'a> Spanned for SelectExpr<'a> {
+impl Spanned for SelectExpr<'_> {
     fn span(&self) -> Span {
         self.expr.join_span(&self.as_)
     }
@@ -59,7 +59,7 @@ pub enum JoinSpecification<'a> {
     Using(Vec<Identifier<'a>>, Span),
 }
 
-impl<'a> Spanned for JoinSpecification<'a> {
+impl Spanned for JoinSpecification<'_> {
     fn span(&self) -> Span {
         match &self {
             JoinSpecification::On(v, s) => s.join_span(v),
@@ -155,7 +155,7 @@ pub struct IndexHint<'a> {
     pub rparen: Span,
 }
 
-impl<'a> Spanned for IndexHint<'a> {
+impl Spanned for IndexHint<'_> {
     fn span(&self) -> Span {
         self.use_
             .span()
@@ -204,7 +204,7 @@ pub enum TableReference<'a> {
     },
 }
 
-impl<'a> Spanned for TableReference<'a> {
+impl Spanned for TableReference<'_> {
     fn span(&self) -> Span {
         match &self {
             TableReference::Table {
@@ -560,7 +560,7 @@ pub struct Locking<'a> {
     pub of: Option<(Span, Vec<Identifier<'a>>)>,
     pub wait: LockWait,
 }
-impl<'a> Spanned for Locking<'a> {
+impl Spanned for Locking<'_> {
     fn span(&self) -> Span {
         self.for_span
             .join_span(&self.strength)
@@ -638,7 +638,7 @@ pub struct Select<'a> {
     pub locking: Option<Locking<'a>>,
 }
 
-impl<'a> Spanned for Select<'a> {
+impl Spanned for Select<'_> {
     fn span(&self) -> Span {
         self.select_span
             .join_span(&self.flags)

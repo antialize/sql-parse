@@ -82,7 +82,7 @@ pub struct Delete<'a> {
     pub returning: Option<(Span, Vec<SelectExpr<'a>>)>,
 }
 
-impl<'a> Spanned for Delete<'a> {
+impl Spanned for Delete<'_> {
     fn span(&self) -> Span {
         self.delete_span
             .join_span(&self.flags)

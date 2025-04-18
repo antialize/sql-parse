@@ -67,7 +67,7 @@ pub(crate) enum Token<'a> {
     Eof,
 }
 
-impl<'a> Token<'a> {
+impl Token<'_> {
     pub(crate) fn name(&self) -> &'static str {
         match self {
             Token::Ampersand => "'&'",
@@ -216,7 +216,7 @@ impl<'a> Lexer<'a> {
         }
         // Data ends at EOF without NL '\' '.' [NL].
         let span = start..self.src.len();
-        return (self.s(span.clone()), span);
+        (self.s(span.clone()), span)
     }
 
     pub fn next_token(&mut self) -> (Token<'a>, Span) {

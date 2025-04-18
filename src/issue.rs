@@ -52,7 +52,7 @@ pub struct IssueHandle<'a, 'b> {
     issue: &'b mut Issue<'a>,
 }
 
-impl<'a, 'b> IssueHandle<'a, 'b> {
+impl IssueHandle<'_, '_> {
     pub fn frag(
         &mut self,
         message: impl Into<Cow<'static, str>>,
@@ -137,7 +137,7 @@ impl<'a> Issues<'a> {
     }
 }
 
-impl<'a> Display for Issues<'a> {
+impl Display for Issues<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if self.issues.is_empty() {
             return writeln!(f, "No issues");

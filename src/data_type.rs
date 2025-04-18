@@ -45,7 +45,7 @@ pub enum DataTypeProperty<'a> {
     Check((Span, Box<Expression<'a>>)),
 }
 
-impl<'a> Spanned for DataTypeProperty<'a> {
+impl Spanned for DataTypeProperty<'_> {
     fn span(&self) -> Span {
         match &self {
             DataTypeProperty::Signed(v) => v.span(),
@@ -123,7 +123,7 @@ pub enum Type<'a> {
     Inet6,
 }
 
-impl<'a> OptSpanned for Type<'a> {
+impl OptSpanned for Type<'_> {
     fn opt_span(&self) -> Option<Span> {
         match &self {
             Type::Boolean => None,
@@ -176,7 +176,7 @@ pub struct DataType<'a> {
     pub properties: Vec<DataTypeProperty<'a>>,
 }
 
-impl<'a> Spanned for DataType<'a> {
+impl Spanned for DataType<'_> {
     fn span(&self) -> Span {
         self.identifier
             .join_span(&self.type_)

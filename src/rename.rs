@@ -16,7 +16,7 @@ pub struct TableToTable<'a> {
     pub new_table: QualifiedName<'a>,
 }
 
-impl<'a> Spanned for TableToTable<'a> {
+impl Spanned for TableToTable<'_> {
     fn span(&self) -> Span {
         self.table
             .join_span(&self.to_span)
@@ -53,7 +53,7 @@ pub struct RenameTable<'a> {
     pub table_to_tables: Vec<TableToTable<'a>>,
 }
 
-impl<'a> Spanned for RenameTable<'a> {
+impl Spanned for RenameTable<'_> {
     fn span(&self) -> Span {
         self.rename_span
             .join_span(&self.table_span)
