@@ -22,7 +22,7 @@ pub struct WithBlock<'a> {
     pub rparen_span: Span,
 }
 
-impl<'a> Spanned for WithBlock<'a> {
+impl Spanned for WithBlock<'_> {
     fn span(&self) -> Span {
         self.identifier
             .span()
@@ -61,7 +61,7 @@ pub struct WithQuery<'a> {
     pub statement: Box<Statement<'a>>,
 }
 
-impl<'a> Spanned for WithQuery<'a> {
+impl Spanned for WithQuery<'_> {
     fn span(&self) -> Span {
         self.with_span
             .join_span(&self.with_blocks)

@@ -73,7 +73,7 @@ pub struct Update<'a> {
     pub where_: Option<(Expression<'a>, Span)>,
 }
 
-impl<'a> Spanned for Update<'a> {
+impl Spanned for Update<'_> {
     fn span(&self) -> Span {
         let mut set_span = None;
         for (a, b) in &self.set {

@@ -54,7 +54,7 @@ pub struct DropTable<'a> {
     pub cascade: Option<Span>,
 }
 
-impl<'a> Spanned for DropTable<'a> {
+impl Spanned for DropTable<'_> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.temporary)
@@ -95,7 +95,7 @@ pub struct DropView<'a> {
     pub views: Vec<QualifiedName<'a>>,
 }
 
-impl<'a> Spanned for DropView<'a> {
+impl Spanned for DropView<'_> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.temporary)
@@ -135,7 +135,7 @@ pub struct DropDatabase<'a> {
     pub database: Identifier<'a>,
 }
 
-impl<'a> Spanned for DropDatabase<'a> {
+impl Spanned for DropDatabase<'_> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.database_span)
@@ -173,7 +173,7 @@ pub struct DropEvent<'a> {
     pub event: QualifiedName<'a>,
 }
 
-impl<'a> Spanned for DropEvent<'a> {
+impl Spanned for DropEvent<'_> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.event_span)
@@ -211,7 +211,7 @@ pub struct DropFunction<'a> {
     pub function: QualifiedName<'a>,
 }
 
-impl<'a> Spanned for DropFunction<'a> {
+impl Spanned for DropFunction<'_> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.function_span)
@@ -249,7 +249,7 @@ pub struct DropProcedure<'a> {
     pub procedure: QualifiedName<'a>,
 }
 
-impl<'a> Spanned for DropProcedure<'a> {
+impl Spanned for DropProcedure<'_> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.procedure_span)
@@ -288,7 +288,7 @@ pub struct DropServer<'a> {
     pub server: Identifier<'a>,
 }
 
-impl<'a> Spanned for DropServer<'a> {
+impl Spanned for DropServer<'_> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.server_span)
@@ -326,7 +326,7 @@ pub struct DropTrigger<'a> {
     pub identifier: QualifiedName<'a>,
 }
 
-impl<'a> Spanned for DropTrigger<'a> {
+impl Spanned for DropTrigger<'_> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.trigger_span)
@@ -580,7 +580,7 @@ pub struct DropIndex<'a> {
     pub on: Option<(Span, QualifiedName<'a>)>,
 }
 
-impl<'a> Spanned for DropIndex<'a> {
+impl Spanned for DropIndex<'_> {
     fn span(&self) -> Span {
         self.drop_span
             .join_span(&self.index_span)

@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use alloc::{borrow::Cow, fmt::Write, format, string::String, vec::Vec};
+use alloc::{borrow::Cow, format, string::String, vec::Vec};
 
 use crate::{
     issue::{IssueHandle, Issues},
@@ -75,20 +75,20 @@ pub(crate) fn decode_double_quoted_string(s: &str) -> Cow<'_, str> {
     }
 }
 
-pub(crate) struct SingleQuotedString<'a>(pub(crate) &'a str);
+// pub(crate) struct SingleQuotedString<'a>(pub(crate) &'a str);
 
-impl<'a> alloc::fmt::Display for SingleQuotedString<'a> {
-    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
-        f.write_char('\'')?;
-        for c in self.0.chars() {
-            if c == '\'' {
-                f.write_char('\'')?;
-            }
-            f.write_char(c)?;
-        }
-        f.write_char('\'')
-    }
-}
+// impl alloc::fmt::Display for SingleQuotedString<'_> {
+//     fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
+//         f.write_char('\'')?;
+//         for c in self.0.chars() {
+//             if c == '\'' {
+//                 f.write_char('\'')?;
+//             }
+//             f.write_char(c)?;
+//         }
+//         f.write_char('\'')
+//     }
+// }
 
 impl<'a, 'b> Parser<'a, 'b> {
     pub(crate) fn new(src: &'a str, issues: &'b mut Issues<'a>, options: &'b ParseOptions) -> Self {

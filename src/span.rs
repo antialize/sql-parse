@@ -123,13 +123,13 @@ impl<S: Spanned> Spanned for (bool, S) {
     }
 }
 
-impl<'a, S: Spanned> Spanned for (&'a str, S) {
+impl<S: Spanned> Spanned for (&str, S) {
     fn span(&self) -> Span {
         self.1.span()
     }
 }
 
-impl<'a, S: Spanned> Spanned for (alloc::borrow::Cow<'a, str>, S) {
+impl<S: Spanned> Spanned for (alloc::borrow::Cow<'_, str>, S) {
     fn span(&self) -> Span {
         self.1.span()
     }

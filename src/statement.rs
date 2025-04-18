@@ -43,7 +43,7 @@ pub struct Set<'a> {
     pub values: Vec<(Identifier<'a>, Expression<'a>)>,
 }
 
-impl<'a> Spanned for Set<'a> {
+impl Spanned for Set<'_> {
     fn span(&self) -> Span {
         self.set_span.join_span(&self.values)
     }
@@ -158,7 +158,7 @@ pub struct IfCondition<'a> {
     pub then: Vec<Statement<'a>>,
 }
 
-impl<'a> Spanned for IfCondition<'a> {
+impl Spanned for IfCondition<'_> {
     fn span(&self) -> Span {
         self.then_span
             .join_span(&self.elseif_span)
@@ -181,7 +181,7 @@ pub struct If<'a> {
     pub endif_span: Span,
 }
 
-impl<'a> Spanned for If<'a> {
+impl Spanned for If<'_> {
     fn span(&self) -> Span {
         self.if_span
             .join_span(&self.conditions)
@@ -245,7 +245,7 @@ pub struct Return<'a> {
     pub expr: Expression<'a>,
 }
 
-impl<'a> Spanned for Return<'a> {
+impl Spanned for Return<'_> {
     fn span(&self) -> Span {
         self.return_span.join_span(&self.expr)
     }
@@ -303,7 +303,7 @@ pub struct Signal<'a> {
     pub sets: Vec<(SignalConditionInformationName, Span, Expression<'a>)>,
 }
 
-impl<'a> Spanned for Signal<'a> {
+impl Spanned for Signal<'_> {
     fn span(&self) -> Span {
         self.signal_span
             .join_span(&self.sqlstate_span)
@@ -424,7 +424,7 @@ pub enum Statement<'a> {
     Return(Return<'a>),
 }
 
-impl<'a> Spanned for Statement<'a> {
+impl Spanned for Statement<'_> {
     fn span(&self) -> Span {
         match &self {
             Statement::CreateIndex(v) => v.span(),
@@ -540,7 +540,7 @@ pub struct WhenStatement<'a> {
     pub then: Vec<Statement<'a>>,
 }
 
-impl<'a> Spanned for WhenStatement<'a> {
+impl Spanned for WhenStatement<'_> {
     fn span(&self) -> Span {
         self.when_span
             .join_span(&self.when)
@@ -564,7 +564,7 @@ pub struct CaseStatement<'a> {
     pub end_span: Span,
 }
 
-impl<'a> Spanned for CaseStatement<'a> {
+impl Spanned for CaseStatement<'_> {
     fn span(&self) -> Span {
         self.case_span
             .join_span(&self.value)
@@ -706,7 +706,7 @@ pub struct UnionWith<'a> {
     pub union_statement: Box<Statement<'a>>,
 }
 
-impl<'a> Spanned for UnionWith<'a> {
+impl Spanned for UnionWith<'_> {
     fn span(&self) -> Span {
         self.union_span
             .join_span(&self.union_type)
@@ -727,7 +727,7 @@ pub struct Union<'a> {
     pub limit: Option<(Span, Option<Expression<'a>>, Expression<'a>)>,
 }
 
-impl<'a> Spanned for Union<'a> {
+impl Spanned for Union<'_> {
     fn span(&self) -> Span {
         self.left
             .join_span(&self.with)
@@ -745,7 +745,7 @@ pub struct Copy<'a> {
     pub stdin_span: Span,
 }
 
-impl<'a> Spanned for Copy<'a> {
+impl Spanned for Copy<'_> {
     fn span(&self) -> Span {
         self.copy_span
             .join_span(&self.table)
@@ -755,7 +755,7 @@ impl<'a> Spanned for Copy<'a> {
     }
 }
 
-impl<'a> Copy<'a> {
+impl Copy<'_> {
     fn reads_from_stdin(&self) -> bool {
         // There are COPY statements that don't read from STDIN,
         // but we don't support them in this parser - we only support FROM STDIN.

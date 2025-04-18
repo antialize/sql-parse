@@ -12,7 +12,7 @@ pub struct QualifiedName<'a> {
     pub identifier: Identifier<'a>,
 }
 
-impl<'a> Spanned for QualifiedName<'a> {
+impl Spanned for QualifiedName<'_> {
     fn span(&self) -> Span {
         self.identifier.join_span(&self.prefix)
     }

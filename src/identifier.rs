@@ -24,32 +24,32 @@ pub struct Identifier<'a> {
     pub span: Span,
 }
 
-impl<'a> PartialEq for Identifier<'a> {
+impl PartialEq for Identifier<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
 }
-impl<'a> Eq for Identifier<'a> {}
+impl Eq for Identifier<'_> {}
 
-impl<'a> PartialOrd for Identifier<'a> {
+impl PartialOrd for Identifier<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a> Ord for Identifier<'a> {
+impl Ord for Identifier<'_> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.value.cmp(other.value)
     }
 }
 
-impl<'a> alloc::fmt::Display for Identifier<'a> {
+impl alloc::fmt::Display for Identifier<'_> {
     fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         self.value.fmt(f)
     }
 }
 
-impl<'a> Borrow<str> for Identifier<'a> {
+impl Borrow<str> for Identifier<'_> {
     fn borrow(&self) -> &str {
         self.value
     }
@@ -75,7 +75,7 @@ impl<'a> core::ops::Deref for Identifier<'a> {
     }
 }
 
-impl<'a> Spanned for Identifier<'a> {
+impl Spanned for Identifier<'_> {
     fn span(&self) -> Span {
         self.span.span()
     }

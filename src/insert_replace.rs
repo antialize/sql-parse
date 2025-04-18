@@ -68,7 +68,7 @@ pub enum OnConflictTarget<'a> {
     None,
 }
 
-impl<'a> OptSpanned for OnConflictTarget<'a> {
+impl OptSpanned for OnConflictTarget<'_> {
     fn opt_span(&self) -> Option<Span> {
         match self {
             OnConflictTarget::Column { name } => Some(name.span()),
@@ -91,7 +91,7 @@ pub enum OnConflictAction<'a> {
     },
 }
 
-impl<'a> Spanned for OnConflictAction<'a> {
+impl Spanned for OnConflictAction<'_> {
     fn span(&self) -> Span {
         match self {
             OnConflictAction::DoNothing(span) => span.span(),
@@ -111,7 +111,7 @@ pub struct OnConflict<'a> {
     pub action: OnConflictAction<'a>,
 }
 
-impl<'a> Spanned for OnConflict<'a> {
+impl Spanned for OnConflict<'_> {
     fn span(&self) -> Span {
         self.on_conflict_span
             .join_span(&self.target)
@@ -126,7 +126,7 @@ pub struct InsertReplaceSetPair<'a> {
     pub value: Expression<'a>,
 }
 
-impl<'a> Spanned for InsertReplaceSetPair<'a> {
+impl Spanned for InsertReplaceSetPair<'_> {
     fn span(&self) -> Span {
         self.column
             .join_span(&self.equal_span)
@@ -140,7 +140,7 @@ pub struct InsertReplaceSet<'a> {
     pub pairs: Vec<InsertReplaceSetPair<'a>>,
 }
 
-impl<'a> Spanned for InsertReplaceSet<'a> {
+impl Spanned for InsertReplaceSet<'_> {
     fn span(&self) -> Span {
         self.set_span.join_span(&self.pairs)
     }
@@ -152,7 +152,7 @@ pub struct InsertReplaceOnDuplicateKeyUpdate<'a> {
     pub pairs: Vec<InsertReplaceSetPair<'a>>,
 }
 
-impl<'a> Spanned for InsertReplaceOnDuplicateKeyUpdate<'a> {
+impl Spanned for InsertReplaceOnDuplicateKeyUpdate<'_> {
     fn span(&self) -> Span {
         self.on_duplicate_key_update_span.join_span(&self.pairs)
     }
@@ -242,7 +242,7 @@ pub struct InsertReplace<'a> {
     pub returning: Option<(Span, Vec<SelectExpr<'a>>)>,
 }
 
-impl<'a> Spanned for InsertReplace<'a> {
+impl Spanned for InsertReplace<'_> {
     fn span(&self) -> Span {
         self.type_
             .join_span(&self.flags)

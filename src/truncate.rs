@@ -34,7 +34,7 @@ pub struct TruncateTable<'a> {
     pub table_name: QualifiedName<'a>,
 }
 
-impl<'a> Spanned for TruncateTable<'a> {
+impl Spanned for TruncateTable<'_> {
     fn span(&self) -> Span {
         self.truncate_span
             .join_span(&self.table_span)
