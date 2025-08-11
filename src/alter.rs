@@ -756,9 +756,7 @@ fn parse_alter_table<'a>(
                             match parser.token {
                                 Token::Ident(_, Keyword::DEFAULT) => {
                                     let drop_default_span = parser.consume().join_span(&set_span);
-                                    AlterColumnAction::DropDefault {
-                                        drop_default_span,
-                                    }
+                                    AlterColumnAction::DropDefault { drop_default_span }
                                 }
                                 Token::Ident(_, Keyword::NOT) => {
                                     let drop_not_null_span = set_span.join_span(

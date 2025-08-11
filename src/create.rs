@@ -1033,12 +1033,31 @@ fn parse_create_index<'a>(
             gist_span.join_span(&using_span),
         ));
     }
+
     let l_paren_span = parser.consume_token(Token::LParen)?;
     let mut column_names = Vec::new();
-    column_names.push(parser.consume_plain_identifier()?);
-    while parser.skip_token(Token::Comma).is_some() {
+    loop {
         column_names.push(parser.consume_plain_identifier()?);
+        if let Token::Ident(
+            _,
+            Keyword::TEXT_PATTERN_OPS
+            | Keyword::VARCHAR_PATTERN_OPS
+            | Keyword::BPCHAR_PATTERN_OPS
+            | Keyword::INT8_OPS
+            | Keyword::INT4_OPS
+            | Keyword::INT2_OPS,
+        ) = &parser.token
+        {
+            let range = parser.consume();
+            if !parser.options.dialect.is_postgresql() {
+                parser.err("Opclasses not supporetd", &range);
+            }
+        }
+        if parser.skip_token(Token::Comma).is_none() {
+            break;
+        }
     }
+
     let r_paren_span = parser.consume_token(Token::RParen)?;
 
     let mut where_ = None;

@@ -174,6 +174,7 @@ pub enum Function<'a> {
     SoundEx,
     Space,
     Sqrt,
+    StartsWith,
     StrCmp,
     Strftime,
     StrToDate,
@@ -600,6 +601,7 @@ fn parse_function<'a>(
         Token::Ident(_, Keyword::VALUES) => Function::Value,
         Token::Ident(_, Keyword::LEAD) => Function::Lead,
         Token::Ident(_, Keyword::LAG) => Function::Lag,
+        Token::Ident(_, Keyword::STARTS_WITH) => Function::StartsWith,
 
         //https://mariadb.com/kb/en/control-flow-functions/
         Token::Ident(_, Keyword::IFNULL) => Function::IfNull,
