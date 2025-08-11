@@ -381,6 +381,7 @@ fn parse_signal<'a>(parser: &mut Parser<'a, '_>) -> Result<Signal<'a>, ParseErro
 }
 
 /// SQL statement
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 pub enum Statement<'a> {
     CreateIndex(CreateIndex<'a>),

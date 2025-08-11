@@ -18,9 +18,9 @@ use crate::{
     keywords::Keyword,
     lexer::Token,
     parser::{ParseError, Parser},
-    select::{parse_table_reference, TableReference},
+    select::{parse_select_expr, parse_table_reference, TableReference},
     span::OptSpanned,
-    Identifier, Span, Spanned,
+    Identifier, SelectExpr, Span, Spanned,
 };
 
 /// Flags specified after "UPDATE"
@@ -71,6 +71,8 @@ pub struct Update<'a> {
     pub set: Vec<(Vec<Identifier<'a>>, Expression<'a>)>,
     /// Where expression and span of "WHERE" if specified
     pub where_: Option<(Expression<'a>, Span)>,
+    /// Span of "RETURNING" and select expressions after "RETURNING", if "RETURNING" is present
+    pub returning: Option<(Span, Vec<SelectExpr<'a>>)>,
 }
 
 impl<'a> Spanned for Update<'a> {
@@ -86,6 +88,7 @@ impl<'a> Spanned for Update<'a> {
             .join_span(&self.set_span)
             .join_span(&set_span)
             .join_span(&self.where_)
+            .join_span(&self.returning)
     }
 }
 
@@ -134,6 +137,22 @@ pub(crate) fn parse_update<'a>(parser: &mut Parser<'a, '_>) -> Result<Update<'a>
         None
     };
 
+    let returning = if let Some(returning_span) = parser.skip_keyword(Keyword::RETURNING) {
+        let mut returning_exprs = Vec::new();
+        loop {
+            returning_exprs.push(parse_select_expr(parser)?);
+            if parser.skip_token(Token::Comma).is_none() {
+                break;
+            }
+        }
+        if !parser.options.dialect.is_postgresql() {
+            parser.err("Only support by postgesql", &returning_span);
+        }
+        Some((returning_span, returning_exprs))
+    } else {
+        None
+    };
+
     Ok(Update {
         flags,
         update_span,
@@ -141,6 +160,7 @@ pub(crate) fn parse_update<'a>(parser: &mut Parser<'a, '_>) -> Result<Update<'a>
         set_span,
         set,
         where_,
+        returning,
     })
 }
 

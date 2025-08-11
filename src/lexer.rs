@@ -216,7 +216,7 @@ impl<'a> Lexer<'a> {
         }
         // Data ends at EOF without NL '\' '.' [NL].
         let span = start..self.src.len();
-        return (self.s(span.clone()), span);
+        (self.s(span.clone()), span)
     }
 
     pub fn next_token(&mut self) -> (Token<'a>, Span) {

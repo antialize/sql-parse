@@ -16,7 +16,6 @@ use alloc::{boxed::Box, vec::Vec};
 pub type Span = core::ops::Range<usize>;
 
 /// Compute an optional byte span of an ast fragment
-
 pub trait OptSpanned {
     /// Compute an optional byte span of an ast fragment
     fn opt_span(&self) -> Option<Span>;
@@ -123,7 +122,7 @@ impl<S: Spanned> Spanned for (bool, S) {
     }
 }
 
-impl<'a, S: Spanned> Spanned for (&'a str, S) {
+impl<S: Spanned> Spanned for (& str, S) {
     fn span(&self) -> Span {
         self.1.span()
     }
