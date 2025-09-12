@@ -58,8 +58,8 @@ impl Spanned for InsertReplaceType {
 
 #[derive(Clone, Debug)]
 pub enum OnConflictTarget<'a> {
-    Column {
-        name: Identifier<'a>,
+    Columns {
+        names: Vec<Identifier<'a>>,
     },
     OnConstraint {
         on_constraint_span: Span,
@@ -71,7 +71,7 @@ pub enum OnConflictTarget<'a> {
 impl<'a> OptSpanned for OnConflictTarget<'a> {
     fn opt_span(&self) -> Option<Span> {
         match self {
-            OnConflictTarget::Column { name } => Some(name.span()),
+            OnConflictTarget::Columns { names } => names.opt_span(),
             OnConflictTarget::OnConstraint {
                 on_constraint_span: token,
                 name,
@@ -426,9 +426,13 @@ pub(crate) fn parse_insert_replace<'a>(
                     let target = match &parser.token {
                         Token::LParen => {
                             parser.consume_token(Token::LParen)?;
-                            let name = parser.consume_plain_identifier()?;
+                            let mut names = Vec::new();
+                            names.push(parser.consume_plain_identifier()?);
+                            while parser.skip_token(Token::Comma).is_some() {
+                                names.push(parser.consume_plain_identifier()?);
+                            }
                             parser.consume_token(Token::RParen)?;
-                            OnConflictTarget::Column { name }
+                            OnConflictTarget::Columns { names }
                         }
                         Token::Ident(_, Keyword::ON) => {
                             let on_constraint =
