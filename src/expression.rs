@@ -1077,7 +1077,7 @@ pub(crate) fn parse_expression<'a>(
 ) -> Result<Expression<'a>, ParseError> {
     let mut r = Reducer { stack: Vec::new() };
     loop {
-        let e = match &parser.token {
+        let e = match parser.token.clone() {
             Token::Ident(_, Keyword::OR) | Token::DoublePipe if !inner => {
                 r.shift_binop(parser.consume(), BinaryOperator::Or)
             }
@@ -1454,6 +1454,12 @@ pub(crate) fn parse_expression<'a>(
                 } else {
                     r.shift_expr(Expression::Invalid(extract_span))
                 }
+            }
+            Token::Ident(_, Keyword::LEFT) if matches!(parser.peek(), Token::LParen) => {
+                let i = parser.token.clone();
+                let s = parser.span.clone();
+                parser.consume();
+                r.shift_expr(parse_function(parser, i, s)?)
             }
             Token::Ident(_, k) if k.expr_ident() => {
                 let i = parser.token.clone();
