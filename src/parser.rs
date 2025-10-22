@@ -26,6 +26,7 @@ pub(crate) enum ParseError {
 
 pub(crate) struct Parser<'a, 'b> {
     pub(crate) token: Token<'a>,
+    pub(crate) peeked_token: Option<(Token<'a>, Span)>,
     pub(crate) span: Span,
     pub(crate) lexer: Lexer<'a>,
     pub(crate) issues: &'b mut Issues<'a>,
@@ -81,6 +82,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         let (token, span) = lexer.next_token();
         Self {
             token,
+            peeked_token: None,
             span,
             lexer,
             issues,
@@ -166,16 +168,23 @@ impl<'a, 'b> Parser<'a, 'b> {
 
     pub(crate) fn read_from_stdin_and_next(&mut self) -> (&'a str, Span) {
         let stdin = self.lexer.read_from_stdin();
-        let (token, span) = self.lexer.next_token();
+        let (token, span) = self.peeked_token.take().unwrap_or_else(|| self.lexer.next_token());
         self.token = token;
         self.span = span;
         stdin
     }
 
     pub(crate) fn next(&mut self) {
-        let (token, span) = self.lexer.next_token();
+        let (token, span) = self.peeked_token.take().unwrap_or_else(|| self.lexer.next_token());
         self.token = token;
         self.span = span;
+    }
+
+    pub(crate) fn peek(&mut self) -> &Token<'a> {
+        if self.peeked_token.is_none() {
+            self.peeked_token = Some(self.lexer.next_token());
+        }
+        &self.peeked_token.as_ref().unwrap().0
     }
 
     pub(crate) fn expected_error(&mut self, name: &'static str) {

@@ -89,7 +89,8 @@ pub use drop::{
     DropTrigger, DropView,
 };
 pub use expression::{
-    BinaryOperator, Expression, Function, IdentifierPart, Is, UnaryOperator, Variable, When,
+    BinaryOperator, Expression, Function, IdentifierPart, Is, TimeUnit, UnaryOperator, Variable,
+    When,
 };
 pub use insert_replace::{
     InsertReplace, InsertReplaceFlag, InsertReplaceOnDuplicateKeyUpdate, InsertReplaceSet,

@@ -25,7 +25,7 @@ use alloc::vec;
 use alloc::{boxed::Box, vec::Vec};
 
 /// Function to execute
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Function<'a> {
     Abs,
     Acos,
@@ -44,7 +44,7 @@ pub enum Function<'a> {
     Concat,
     ConcatWs,
     Conv,
-    ConvertTs,
+    ConvertTz,
     Cos,
     Cot,
     Crc32,
@@ -53,7 +53,6 @@ pub enum Function<'a> {
     CurrentTimestamp,
     CurTime,
     Date,
-    DateAdd,
     DateDiff,
     DateFormat,
     DateSub,
@@ -77,6 +76,7 @@ pub enum Function<'a> {
     FromUnixTime,
     Greatest,
     Hex,
+    Hour,
     If,
     IfNull,
     Insert,
@@ -120,7 +120,10 @@ pub enum Function<'a> {
     JsonUnquote,
     JsonValid,
     JsonValue,
+    Lag,
+    LastDay,
     LCase,
+    Lead,
     Least,
     Left,
     Length,
@@ -142,6 +145,7 @@ pub enum Function<'a> {
     Mid,
     Min,
     Minute,
+    Month,
     MonthName,
     NaturalSortkey,
     Now,
@@ -178,18 +182,16 @@ pub enum Function<'a> {
     StrCmp,
     Strftime,
     StrToDate,
-    SubDate,
     SubStr,
     SubStringIndex,
     SubTime,
     Sum,
+    SysDate,
     Tan,
     Time,
     TimeDiff,
     TimeFormat,
     Timestamp,
-    TimestampAdd,
-    TimestampDiff,
     TimeToSec,
     ToBase64,
     ToChar,
@@ -210,8 +212,8 @@ pub enum Function<'a> {
     Week,
     Weekday,
     WeekOfYear,
-    Lead,
-    Lag,
+    Year,
+    YearWeek,
     Other(&'a str),
 }
 
@@ -324,6 +326,77 @@ impl<'a> Spanned for WindowSpec<'a> {
     }
 }
 
+/// Units of time
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimeUnit {
+    /// Microseconds
+    Microsecond,
+    /// Seconds
+    Second,
+    /// Minutes
+    Minute,
+    /// Hours
+    Hour,
+    /// Days
+    Day,
+    /// Weeks
+    Week,
+    /// Months
+    Month,
+    /// Quarters
+    Quarter,
+    /// Years
+    Year,
+    /// Seconds.Microseconds
+    SecondMicrosecond,
+    /// Minutes.Seconds.Microseconds
+    MinuteMicrosecond,
+    /// Minutes.Seconds
+    MinuteSecond,
+    /// Hours.Minutes.Seconds.Microseconds
+    HourMicrosecond,
+    /// Hours.Minutes.Seconds
+    HourSecond,
+    /// Hours.Minutes
+    HourMinute,
+    /// Days Hours.Minutes.Seconds.Microseconds
+    DayMicrosecond,
+    /// Days Hours.Minutes.Seconds
+    DaySecond,
+    /// Days Hours.Minutes
+    DayMinute,
+    /// Days Hours
+    DayHour,
+    /// Years-Months
+    YearMonth,
+}
+
+fn parse_time_unit(t: &Token<'_>) -> Option<TimeUnit> {
+    match t {
+        Token::Ident(_, Keyword::MICROSECOND) => Some(TimeUnit::Microsecond),
+        Token::Ident(_, Keyword::SECOND) => Some(TimeUnit::Second),
+        Token::Ident(_, Keyword::MINUTE) => Some(TimeUnit::Minute),
+        Token::Ident(_, Keyword::HOUR) => Some(TimeUnit::Hour),
+        Token::Ident(_, Keyword::DAY) => Some(TimeUnit::Day),
+        Token::Ident(_, Keyword::WEEK) => Some(TimeUnit::Week),
+        Token::Ident(_, Keyword::MONTH) => Some(TimeUnit::Month),
+        Token::Ident(_, Keyword::QUARTER) => Some(TimeUnit::Quarter),
+        Token::Ident(_, Keyword::YEAR) => Some(TimeUnit::Year),
+        Token::Ident(_, Keyword::SECOND_MICROSECOND) => Some(TimeUnit::SecondMicrosecond),
+        Token::Ident(_, Keyword::MINUTE_MICROSECOND) => Some(TimeUnit::MinuteMicrosecond),
+        Token::Ident(_, Keyword::MINUTE_SECOND) => Some(TimeUnit::MinuteSecond),
+        Token::Ident(_, Keyword::HOUR_MICROSECOND) => Some(TimeUnit::HourMicrosecond),
+        Token::Ident(_, Keyword::HOUR_SECOND) => Some(TimeUnit::HourSecond),
+        Token::Ident(_, Keyword::HOUR_MINUTE) => Some(TimeUnit::HourMinute),
+        Token::Ident(_, Keyword::DAY_MICROSECOND) => Some(TimeUnit::DayMicrosecond),
+        Token::Ident(_, Keyword::DAY_SECOND) => Some(TimeUnit::DaySecond),
+        Token::Ident(_, Keyword::DAY_MINUTE) => Some(TimeUnit::DayMinute),
+        Token::Ident(_, Keyword::DAY_HOUR) => Some(TimeUnit::DayHour),
+        Token::Ident(_, Keyword::YEAR_MONTH) => Some(TimeUnit::YearMonth),
+        _ => None,
+    }
+}
+
 /// Representation of an expression
 #[derive(Debug, Clone)]
 pub enum Expression<'a> {
@@ -374,10 +447,29 @@ pub enum Expression<'a> {
     },
     /// Identifier pointing to column
     Identifier(Vec<IdentifierPart<'a>>),
+    /// Time Interval
+    Interval {
+        /// Span of "INTERVAL"
+        interval_span: Span,
+        /// Time internal
+        time_interval: (Vec<i64>, Span),
+        /// Unit of the time interval
+        time_unit: (TimeUnit, Span),
+    },
     /// Input argument to query, the first argument is the occurrence number of the argumnet
     Arg((usize, Span)),
     /// Exists expression
     Exists(Box<Statement<'a>>),
+    Extract {
+        /// Span of "EXTRACT"
+        extract_span: Span,
+        /// Unit of the time interval
+        time_unit: (TimeUnit, Span),
+        /// Span of "FROM"
+        from_span: Span,
+        /// Date expression
+        date: Box<Expression<'a>>,
+    },
     /// In expression
     In {
         /// Left hand side expression
@@ -447,6 +539,20 @@ pub enum Expression<'a> {
         variable: Variable<'a>,
         // Span of variable
         variable_span: Span,
+    },
+    /// Timestampadd call
+    TimestampAdd {
+        timestamp_add_span: Span,
+        unit: (TimeUnit, Span),
+        interval: Box<Expression<'a>>,
+        datetime: Box<Expression<'a>>,
+    },
+    /// Timestampdiff call
+    TimestampDiff {
+        timestamp_diff_span: Span,
+        unit: (TimeUnit, Span),
+        e1: Box<Expression<'a>>,
+        e2: Box<Expression<'a>>,
     },
 }
 
@@ -525,6 +631,40 @@ impl<'a> Spanned for Expression<'a> {
                 .join_span(args)
                 .join_span(over_span)
                 .join_span(window_spec),
+            Expression::Interval {
+                interval_span,
+                time_interval,
+                time_unit,
+            } => interval_span
+                .join_span(&time_interval.1)
+                .join_span(&time_unit.1),
+            Expression::Extract {
+                extract_span,
+                time_unit,
+                from_span,
+                date,
+            } => extract_span
+                .join_span(&time_unit.1)
+                .join_span(from_span)
+                .join_span(date),
+            Expression::TimestampAdd {
+                timestamp_add_span: timespan_add_span,
+                unit,
+                interval,
+                datetime,
+            } => timespan_add_span
+                .join_span(&unit.1)
+                .join_span(interval)
+                .join_span(datetime),
+            Expression::TimestampDiff {
+                timestamp_diff_span,
+                unit,
+                e1,
+                e2,
+            } => timestamp_diff_span
+                .join_span(&unit.1)
+                .join_span(e1)
+                .join_span(e2),
         }
     }
 }
@@ -646,14 +786,15 @@ fn parse_function<'a>(
         // https://mariadb.com/kb/en/date-time-functions/
         Token::Ident(_, Keyword::ADDDATE) => Function::AddDate,
         Token::Ident(_, Keyword::ADDTIME) => Function::AddTime,
-        Token::Ident(_, Keyword::CONVERT_TS) => Function::ConvertTs,
+        Token::Ident(_, Keyword::CONVERT_TZ) => Function::ConvertTz,
         Token::Ident(_, Keyword::CURDATE) => Function::CurDate,
         Token::Ident(_, Keyword::CURRENT_DATE) => Function::CurDate,
         Token::Ident(_, Keyword::CURRENT_TIME) => Function::CurTime,
         Token::Ident(_, Keyword::CURTIME) => Function::CurTime,
         Token::Ident(_, Keyword::DATE) => Function::Date,
+        Token::Ident(_, Keyword::HOUR) => Function::Hour,
         Token::Ident(_, Keyword::DATEDIFF) => Function::DateDiff,
-        Token::Ident(_, Keyword::DATE_ADD) => Function::DateAdd,
+        Token::Ident(_, Keyword::DATE_ADD) => Function::AddDate,
         Token::Ident(_, Keyword::DATE_FORMAT) => Function::DateFormat,
         Token::Ident(_, Keyword::DATE_SUB) => Function::DateSub,
         Token::Ident(_, Keyword::DAY | Keyword::DAYOFMONTH) => Function::DayOfMonth,
@@ -661,29 +802,28 @@ fn parse_function<'a>(
         Token::Ident(_, Keyword::DAYOFWEEK) => Function::DayOfWeek,
         Token::Ident(_, Keyword::DAYOFYEAR) => Function::DayOfYear,
         Token::Ident(_, Keyword::FROM_DAYS) => Function::FromDays,
-        Token::Ident(
-            _,
-            Keyword::LOCALTIME | Keyword::LOCALTIMESTAMP | Keyword::CURRENT_TIMESTAMP,
-        ) => Function::Now,
+        Token::Ident(_, Keyword::CURRENT_TIMESTAMP) => Function::CurrentTimestamp,
+        Token::Ident(_, Keyword::LOCALTIME | Keyword::LOCALTIMESTAMP | Keyword::NOW) => {
+            Function::Now
+        }
         Token::Ident(_, Keyword::MAKEDATE) => Function::MakeDate,
         Token::Ident(_, Keyword::MAKETIME) => Function::MakeTime,
         Token::Ident(_, Keyword::MICROSECOND) => Function::MicroSecond,
         Token::Ident(_, Keyword::MINUTE) => Function::Minute,
+        Token::Ident(_, Keyword::MONTH) => Function::Month,
         Token::Ident(_, Keyword::MONTHNAME) => Function::MonthName,
-        Token::Ident(_, Keyword::NOW) => Function::Now,
         Token::Ident(_, Keyword::PERIOD_ADD) => Function::PeriodAdd,
         Token::Ident(_, Keyword::PERIOD_DIFF) => Function::PeriodDiff,
         Token::Ident(_, Keyword::QUARTER) => Function::Quarter,
         Token::Ident(_, Keyword::SECOND) => Function::Second,
         Token::Ident(_, Keyword::SEC_TO_TIME) => Function::SecToTime,
         Token::Ident(_, Keyword::STR_TO_DATE) => Function::StrToDate,
-        Token::Ident(_, Keyword::SUBDATE) => Function::SubDate,
+        Token::Ident(_, Keyword::SUBDATE) => Function::DateSub,
         Token::Ident(_, Keyword::SUBTIME) => Function::SubTime,
         Token::Ident(_, Keyword::TIME) => Function::Time,
+        Token::Ident(_, Keyword::LAST_DAY) => Function::LastDay,
         Token::Ident(_, Keyword::TIMEDIFF) => Function::TimeDiff,
         Token::Ident(_, Keyword::TIMESTAMP) => Function::Timestamp,
-        Token::Ident(_, Keyword::TIMESTAMPADD) => Function::TimestampAdd,
-        Token::Ident(_, Keyword::TIMESTAMPDIFF) => Function::TimestampDiff,
         Token::Ident(_, Keyword::TIME_FORMAT) => Function::TimeFormat,
         Token::Ident(_, Keyword::TIME_TO_SEC) => Function::TimeToSec,
         Token::Ident(_, Keyword::TO_DAYS) => Function::ToDays,
@@ -697,6 +837,9 @@ fn parse_function<'a>(
         Token::Ident(_, Keyword::WEEKOFYEAR) => Function::WeekOfYear,
         Token::Ident(_, Keyword::ADD_MONTHS) => Function::AddMonths,
         Token::Ident(_, Keyword::FROM_UNIXTIME) => Function::FromUnixTime,
+        Token::Ident(_, Keyword::YEAR) => Function::Year,
+        Token::Ident(_, Keyword::YEARWEEK) => Function::YearWeek,
+        Token::Ident(_, Keyword::SYSDATE) => Function::SysDate,
 
         // https://mariadb.com/kb/en/json-functions/
         Token::Ident(_, Keyword::JSON_ARRAY) => Function::JsonArray,
@@ -934,7 +1077,7 @@ pub(crate) fn parse_expression<'a>(
 ) -> Result<Expression<'a>, ParseError> {
     let mut r = Reducer { stack: Vec::new() };
     loop {
-        let e = match &parser.token {
+        let e = match parser.token.clone() {
             Token::Ident(_, Keyword::OR) | Token::DoublePipe if !inner => {
                 r.shift_binop(parser.consume(), BinaryOperator::Or)
             }
@@ -1100,6 +1243,90 @@ pub(crate) fn parse_expression<'a>(
             Token::Ident(_, Keyword::LIKE) if !inner => {
                 r.shift_binop(parser.consume(), BinaryOperator::Like)
             }
+            Token::Ident(_, Keyword::INTERVAL) => {
+                let interval_span = parser.consume();
+                let time_interval = match parser.token {
+                    Token::SingleQuotedString(_) | Token::DoubleQuotedString(_) => {
+                        let v = parser.consume_string()?;
+                        let mut r = Vec::new();
+                        for part in v.split([':', '!', ',', '.', '-', ' ']) {
+                            let Ok(v) = part.parse() else {
+                                parser.err("Expected . separated integers in a string", &v);
+                                continue;
+                            };
+                            r.push(v);
+                        }
+                        (r, v.span())
+                    }
+                    Token::Integer(_) => {
+                        let (v, s) = parser.consume_int()?;
+                        (vec![v], s)
+                    }
+                    _ => parser.err_here("Expected integer or string")?,
+                };
+                let Some(u) = parse_time_unit(&parser.token) else {
+                    parser.err_here("Expected time unit")?
+                };
+                let time_unit = (u, parser.consume());
+                let e = Expression::Interval {
+                    interval_span,
+                    time_interval,
+                    time_unit,
+                };
+                r.shift_expr(e)
+            }
+            Token::Ident(_, Keyword::TIMESTAMPADD) => {
+                let timestamp_add_span = parser.consume();
+                parser.consume_token(Token::LParen)?;
+                let parts = parser.recovered("')'", &|t| matches!(t, Token::RParen), |parser| {
+                    let Some(u) = parse_time_unit(&parser.token) else {
+                        parser.err_here("Expected time unit")?
+                    };
+                    let unit = (u, parser.consume());
+                    parser.consume_token(Token::Comma)?;
+                    let interval = parse_expression_outer(parser)?;
+                    parser.consume_token(Token::Comma)?;
+                    let datetime = parse_expression_outer(parser)?;
+                    Ok(Some((unit, Box::new(interval), Box::new(datetime))))
+                })?;
+                parser.consume_token(Token::RParen)?;
+                if let Some((unit, interval, datetime)) = parts {
+                    r.shift_expr(Expression::TimestampAdd {
+                        timestamp_add_span,
+                        unit,
+                        interval,
+                        datetime,
+                    })
+                } else {
+                    r.shift_expr(Expression::Invalid(timestamp_add_span))
+                }
+            }
+            Token::Ident(_, Keyword::TIMESTAMPDIFF) => {
+                let timestamp_diff_span = parser.consume();
+                parser.consume_token(Token::LParen)?;
+                let parts = parser.recovered("')'", &|t| matches!(t, Token::RParen), |parser| {
+                    let Some(u) = parse_time_unit(&parser.token) else {
+                        parser.err_here("Expected time unit")?
+                    };
+                    let unit = (u, parser.consume());
+                    parser.consume_token(Token::Comma)?;
+                    let e1 = parse_expression_outer(parser)?;
+                    parser.consume_token(Token::Comma)?;
+                    let e2 = parse_expression_outer(parser)?;
+                    Ok(Some((unit, Box::new(e1), Box::new(e2))))
+                })?;
+                parser.consume_token(Token::RParen)?;
+                if let Some((unit, e1, e2)) = parts {
+                    r.shift_expr(Expression::TimestampDiff {
+                        timestamp_diff_span,
+                        unit,
+                        e1,
+                        e2,
+                    })
+                } else {
+                    r.shift_expr(Expression::Invalid(timestamp_diff_span))
+                }
+            }
             Token::Plus if !inner => r.shift_binop(parser.consume(), BinaryOperator::Add),
             Token::Div if !inner => r.shift_binop(parser.consume(), BinaryOperator::Divide),
             Token::Minus if !inner => r.shift_binop(parser.consume(), BinaryOperator::Subtract),
@@ -1179,9 +1406,11 @@ pub(crate) fn parse_expression<'a>(
                 }
             }
             Token::Ident(_, Keyword::GROUP_CONCAT) => {
-                let group_concat_span = parser.consume_keyword(Keyword::GROUP_CONCAT)?;
+                let group_concat_span: core::ops::Range<usize> =
+                    parser.consume_keyword(Keyword::GROUP_CONCAT)?;
                 parser.consume_token(Token::LParen)?;
-                let distinct_span = parser.skip_keyword(Keyword::DISTINCT);
+                let distinct_span: Option<core::ops::Range<usize>> =
+                    parser.skip_keyword(Keyword::DISTINCT);
                 let expr = parser.recovered("')'", &|t| matches!(t, Token::RParen), |parser| {
                     let expr = parse_expression_outer(parser)?;
                     Ok(Some(expr))
@@ -1202,6 +1431,36 @@ pub(crate) fn parse_expression<'a>(
                     r.shift_expr(Expression::Invalid(group_concat_span))
                 }
             }
+            Token::Ident(_, Keyword::EXTRACT) => {
+                let extract_span = parser.consume_keyword(Keyword::EXTRACT)?;
+                parser.consume_token(Token::LParen)?;
+                let parts = parser.recovered("')'", &|t| matches!(t, Token::RParen), |parser| {
+                    let Some(u) = parse_time_unit(&parser.token) else {
+                        parser.err_here("Expected time unit")?
+                    };
+                    let time_unit = (u, parser.consume());
+                    let from_span = parser.consume_keyword(Keyword::FROM)?;
+                    let date = parse_expression_outer(parser)?;
+                    Ok(Some((time_unit, from_span, Box::new(date))))
+                })?;
+                parser.consume_token(Token::RParen)?;
+                if let Some((time_unit, from_span, date)) = parts {
+                    r.shift_expr(Expression::Extract {
+                        extract_span,
+                        time_unit,
+                        from_span,
+                        date,
+                    })
+                } else {
+                    r.shift_expr(Expression::Invalid(extract_span))
+                }
+            }
+            Token::Ident(_, Keyword::LEFT) if matches!(parser.peek(), Token::LParen) => {
+                let i = parser.token.clone();
+                let s = parser.span.clone();
+                parser.consume();
+                r.shift_expr(parse_function(parser, i, s)?)
+            }
             Token::Ident(_, k) if k.expr_ident() => {
                 let i = parser.token.clone();
                 let s = parser.span.clone();
@@ -1213,6 +1472,14 @@ pub(crate) fn parse_expression<'a>(
                         Token::Ident(_, Keyword::CURRENT_TIMESTAMP) => {
                             Some(Function::CurrentTimestamp)
                         }
+                        Token::Ident(_, Keyword::LOCALTIME | Keyword::LOCALTIMESTAMP) => {
+                            Some(Function::Now)
+                        }
+                        Token::Ident(_, Keyword::UTC_TIMESTAMP) => Some(Function::UtcTimeStamp),
+                        Token::Ident(_, Keyword::UTC_DATE) => Some(Function::UtcDate),
+                        Token::Ident(_, Keyword::UTC_TIME) => Some(Function::UtcTime),
+                        Token::Ident(_, Keyword::CURRENT_DATE) => Some(Function::CurDate),
+                        Token::Ident(_, Keyword::CURRENT_TIME) => Some(Function::CurTime),
                         _ => None,
                     };
                     if let Some(f) = f {
@@ -1392,7 +1659,7 @@ mod tests {
         expression::{BinaryOperator, Expression},
         issue::Issues,
         parser::Parser,
-        ParseOptions, SQLDialect,
+        Function, ParseOptions, SQLDialect,
     };
 
     use super::{parse_expression, IdentifierPart};
@@ -1461,5 +1728,188 @@ mod tests {
             }
             Ok(())
         });
+    }
+
+    #[test]
+    fn mariadb_datetime_functions() {
+        fn test_func(src: &'static str, f: Function, cnt: usize) {
+            let mut issues = Issues::new(src);
+            let options = ParseOptions::new().dialect(SQLDialect::MariaDB);
+            let mut parser = Parser::new(src, &mut issues, &options);
+            let res = match parse_expression(&mut parser, false) {
+                Ok(res) => res,
+                Err(e) => panic!("Unable to parse {}: {:?}", src, e),
+            };
+            let Expression::Function(pf, args, _) = res else {
+                panic!("Should be parsed as function {}", src);
+            };
+            assert_eq!(pf, f, "Failure en expr {}", src);
+            assert_eq!(args.len(), cnt, "Failure en expr {}", src);
+        }
+        test_func("ADD_MONTHS('2012-01-31', 2)", Function::AddMonths, 2);
+        test_func(
+            "ADDTIME('2007-12-31 23:59:59.999999', '1 1:1:1.000002')",
+            Function::AddTime,
+            2,
+        );
+        test_func(
+            "DATE_ADD('2008-01-02', INTERVAL 31 DAY)",
+            Function::AddDate,
+            2,
+        );
+        test_func(
+            "ADDDATE('2008-01-02', INTERVAL 31 DAY)",
+            Function::AddDate,
+            2,
+        );
+        test_func("ADDDATE('2008-01-02', 31)", Function::AddDate, 2);
+        test_func(
+            "CONVERT_TZ('2016-01-01 12:00:00','+00:00','+10:00')",
+            Function::ConvertTz,
+            3,
+        );
+        test_func("CURDATE()", Function::CurDate, 0);
+        test_func("CURRENT_DATE", Function::CurDate, 0);
+        test_func("CURRENT_DATE()", Function::CurDate, 0);
+        test_func("CURRENT_TIME", Function::CurTime, 0);
+        test_func("CURRENT_TIME()", Function::CurTime, 0);
+        test_func("CURTIME()", Function::CurTime, 0);
+        test_func("CURTIME(2)", Function::CurTime, 1);
+        test_func("CURRENT_DATE", Function::CurDate, 0);
+        test_func("CURRENT_DATE()", Function::CurDate, 0);
+        test_func("CURDATE()", Function::CurDate, 0);
+        test_func("CURRENT_TIMESTAMP", Function::CurrentTimestamp, 0);
+        test_func("CURRENT_TIMESTAMP()", Function::CurrentTimestamp, 0);
+        test_func("CURRENT_TIMESTAMP(10)", Function::CurrentTimestamp, 1);
+        test_func("LOCALTIME", Function::Now, 0);
+        test_func("LOCALTIME()", Function::Now, 0);
+        test_func("LOCALTIME(10)", Function::Now, 1);
+        test_func("LOCALTIMESTAMP", Function::Now, 0);
+        test_func("LOCALTIMESTAMP()", Function::Now, 0);
+        test_func("LOCALTIMESTAMP(10)", Function::Now, 1);
+        test_func("DATE('2013-07-18 12:21:32')", Function::Date, 1);
+        test_func(
+            "DATE_FORMAT('2009-10-04 22:23:00', '%W %M %Y')",
+            Function::DateFormat,
+            2,
+        );
+        test_func(
+            "DATE_SUB('1998-01-02', INTERVAL 31 DAY)",
+            Function::DateSub,
+            2,
+        );
+        test_func("DAY('2007-02-03')", Function::DayOfMonth, 1);
+        test_func("DAYOFMONTH('2007-02-03')", Function::DayOfMonth, 1);
+        test_func(
+            "DATEDIFF('2007-12-31 23:59:59','2007-12-30')",
+            Function::DateDiff,
+            2,
+        );
+        test_func("DAYNAME('2007-02-03')", Function::DayName, 1);
+        test_func("DAYOFYEAR('2018-02-16')", Function::DayOfYear, 1);
+        test_func("DAYOFWEEK('2007-02-03')", Function::DayOfWeek, 1);
+        test_expr("EXTRACT(YEAR_MONTH FROM '2009-07-02 01:02:03')", |e| {
+            let Expression::Extract { .. } = e else {
+                return Err("Wrong type".to_string());
+            };
+            Ok(())
+        });
+        //test_func("FORMAT_PICO_TIME(4321123443212345) AS h", Function::DayOfWeek, 1);
+        test_func("FROM_DAYS(730669)", Function::FromDays, 1);
+        test_func("FROM_UNIXTIME(1196440219)", Function::FromUnixTime, 1);
+        test_func(
+            "FROM_UNIXTIME(UNIX_TIMESTAMP(), '%Y %D %M %h:%i:%s %x')",
+            Function::FromUnixTime,
+            2,
+        );
+        //test_func("GET_FORMAT(DATE, 'EUR')", Function::GetFormat, 2);
+        test_func("HOUR('10:05:03')", Function::Hour, 1);
+        test_func("LAST_DAY('2004-01-01 01:01:01')", Function::LastDay, 1);
+        test_func("MAKEDATE(2011,31)", Function::MakeDate, 2);
+        test_func("MAKETIME(-13,57,33)", Function::MakeTime, 3);
+        test_func("MICROSECOND('12:00:00.123456')", Function::MicroSecond, 1);
+        test_func("MINUTE('2013-08-03 11:04:03')", Function::Minute, 1);
+        test_func("MONTH('2019-01-03')", Function::Month, 1);
+        test_func("MONTHNAME('2019-02-03')", Function::MonthName, 1);
+        test_func("PERIOD_ADD(200801,2)", Function::PeriodAdd, 2);
+        test_func("PERIOD_DIFF(200802,200703)", Function::PeriodDiff, 2);
+        test_func("QUARTER('2008-04-01')", Function::Quarter, 1);
+        test_func("SEC_TO_TIME(12414)", Function::SecToTime, 1);
+        test_func("SECOND('10:05:03')", Function::Second, 1);
+        test_func(
+            "STR_TO_DATE('Wednesday, June 2, 2014', '%W, %M %e, %Y')",
+            Function::StrToDate,
+            2,
+        );
+        test_func(
+            "DATE_SUB('2008-01-02', INTERVAL 31 DAY)",
+            Function::DateSub,
+            2,
+        );
+        test_func("SUBDATE('2008-01-02 12:00:00', 31)", Function::DateSub, 2);
+        test_func(
+            "SUBDATE('2008-01-02', INTERVAL 31 DAY)",
+            Function::DateSub,
+            2,
+        );
+        test_func(
+            "SUBTIME('2007-12-31 23:59:59.999999','1 1:1:1.000002')",
+            Function::SubTime,
+            2,
+        );
+        test_func("SYSDATE()", Function::SysDate, 0);
+        test_func("SYSDATE(4)", Function::SysDate, 1);
+        test_func("TIME('2003-12-31 01:02:03')", Function::Time, 1);
+        test_func(
+            "TIME_FORMAT('100:00:00', '%H %k %h %I %l')",
+            Function::TimeFormat,
+            2,
+        );
+        test_func("TIME_TO_SEC('22:23:00')", Function::TimeToSec, 1);
+        test_func(
+            "TIMEDIFF('2008-12-31 23:59:59.000001', '2008-12-30 01:01:01.000002')",
+            Function::TimeDiff,
+            2,
+        );
+        test_func("TIMESTAMP('2003-12-31')", Function::Timestamp, 1);
+        test_func(
+            "TIMESTAMP('2003-12-31 12:00:00','6:30:00')",
+            Function::Timestamp,
+            2,
+        );
+        test_expr("TIMESTAMPADD(MINUTE,1,'2003-01-02')", |e| {
+            let Expression::TimestampAdd { .. } = e else {
+                return Err("Wrong type".to_string());
+            };
+            Ok(())
+        });
+        test_expr("TIMESTAMPDIFF(MONTH,'2003-02-01','2003-05-01');", |e| {
+            let Expression::TimestampDiff { .. } = e else {
+                return Err("Wrong type".to_string());
+            };
+            Ok(())
+        });
+        test_func("TO_DAYS('2007-10-07')", Function::ToDays, 1);
+        test_func("UNIX_TIMESTAMP()", Function::UnixTimestamp, 0);
+        test_func(
+            "UNIX_TIMESTAMP('2007-11-30 10:30:19')",
+            Function::UnixTimestamp,
+            1,
+        );
+        test_func("UTC_DATE", Function::UtcDate, 0);
+        test_func("UTC_DATE()", Function::UtcDate, 0);
+        test_func("UTC_TIME", Function::UtcTime, 0);
+        test_func("UTC_TIME()", Function::UtcTime, 0);
+        test_func("UTC_TIME(5)", Function::UtcTime, 1);
+        test_func("UTC_TIMESTAMP", Function::UtcTimeStamp, 0);
+        test_func("UTC_TIMESTAMP()", Function::UtcTimeStamp, 0);
+        test_func("UTC_TIMESTAMP(4)", Function::UtcTimeStamp, 1);
+        test_func("WEEK('2008-02-20')", Function::Week, 1);
+        test_func("WEEK('2008-02-20',0)", Function::Week, 2);
+        test_func("WEEKDAY('2008-02-03 22:23:00')", Function::Weekday, 1);
+        test_func("WEEKOFYEAR('2008-02-20')", Function::WeekOfYear, 1);
+        test_func("YEAR('1987-01-01')", Function::Year, 1);
+        test_func("YEARWEEK('1987-01-01')", Function::YearWeek, 1);
+        test_func("YEARWEEK('1987-01-01',0)", Function::YearWeek, 2);
     }
 }
